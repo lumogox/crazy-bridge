@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
-import { state, params } from './state.js';
+import { state, config } from './appState.js';
 
 // --- Traffic System ---
 
@@ -184,7 +184,7 @@ export function updateTraffic(dt) {
 
     // Density Control
     // Only process the first N cars based on density
-    const activeCount = Math.floor(state.trafficData.length * params.trafficDensity);
+    const activeCount = Math.floor(state.trafficData.length * config.trafficDensity);
     const activeCars = state.trafficData.slice(0, activeCount);
 
     // Hide inactive cars
@@ -210,9 +210,9 @@ export function updateTraffic(dt) {
     lanes.forEach(lane => lane.sort((a, b) => a.x - b.x));
 
     // Fog Crash Logic
-    const fogFactor = params.fogDensity / 100; // 0.0 to 1.0
+    const fogFactor = config.fogDensity / 100; // 0.0 to 1.0
     const crashMultiplier = 1 + fogFactor * 10; // 1x to 11x (1000% increase)
-    const speedMult = params.speedMultiplier;
+    const speedMult = config.speedMultiplier;
 
     // Physics Loop
     lanes.forEach((laneCars, laneIndex) => {

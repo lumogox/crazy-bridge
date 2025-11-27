@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state } from './state.js';
+import { state } from './appState.js';
 
 export function createBridge(scene) {
     const bridgeGroup = new THREE.Group();

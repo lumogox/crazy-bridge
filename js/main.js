@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
 import { createScene, setupLighting, setupPostProcessing, onWindowResize, updateTimeOfDay } from './scene.js';
-import { createVolumetricFog, createWater, createTerrain, createCity, createClouds, updateFog } from './environment.js';
+import { createVolumetricFog, createWater, createTerrain, createCity, createClouds, updateFog, createPrecipitation, updatePrecipitation, updateTerrain } from './environment.js';
 import { createBridge } from './bridge.js';
 import { createTraffic, updateTraffic, createShips, updateShips, createBirds, updateBirds, createStreetLights, createParticles, updateParticles } from './dynamic.js';
 import { setupUI } from './ui.js';
-import { state } from './state.js';
+import { state, config } from './appState.js';
 
 let scene, camera, renderer, composer, controls, stats;
 const clock = new THREE.Clock();
@@ -38,6 +38,7 @@ function init() {
     // Dynamic Elements
     createStreetLights(scene);
     createClouds(scene);
+    createPrecipitation(scene);
     createTraffic(scene);
     createShips(scene);
     createBirds(scene);
@@ -67,12 +68,15 @@ function animate() {
     }
     if (state.water) {
         state.water.material.uniforms.time.value = time;
+        state.water.material.uniforms.windSpeed.value = config.windSpeed;
     }
 
     updateTraffic(dt);
     updateShips(dt);
     updateBirds(dt);
     updateParticles(dt);
+    updatePrecipitation(dt);
+    updateTerrain();
     stats.update();
     composer.render();
 }

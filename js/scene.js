@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { state, params, colors } from './state.js';
+import { state, config, colors } from './appState.js';
 
 export function createScene() {
     const scene = new THREE.Scene();
@@ -85,7 +85,7 @@ function lerpColor(color1, color2, alpha) {
 }
 
 export function updateTimeOfDay(scene) {
-    const time = params.time;
+    const time = config.time;
     const angle = (time / 24) * Math.PI * 2 - Math.PI / 2;
     const radius = 1000;
 
@@ -118,11 +118,23 @@ export function updateTimeOfDay(scene) {
         alpha = (time - 18) / 6;
     }
 
-    const skyColor = lerpColor(currentColors.sky, nextColors.sky, alpha);
-    const fogColor = lerpColor(currentColors.fog, nextColors.fog, alpha);
-    const sunColor = lerpColor(currentColors.sun, nextColors.sun, alpha);
-    const ambientColor = lerpColor(currentColors.ambient, nextColors.ambient, alpha);
-    const hemiColor = lerpColor(currentColors.hemi, nextColors.hemi, alpha);
+    let skyColor = lerpColor(currentColors.sky, nextColors.sky, alpha);
+    let fogColor = lerpColor(currentColors.fog, nextColors.fog, alpha);
+    let sunColor = lerpColor(currentColors.sun, nextColors.sun, alpha);
+    let ambientColor = lerpColor(currentColors.ambient, nextColors.ambient, alpha);
+    let hemiColor = lerpColor(currentColors.hemi, nextColors.hemi, alpha);
+
+    // Season Influence
+    const season = config.season;
+    if (season > 0) {
+        const winterSky = new THREE.Color(0x8899aa);
+        const winterFog = new THREE.Color(0xcccccc);
+        const winterAmbient = new THREE.Color(0x666666);
+
+        skyColor.lerp(winterSky, season * 0.6);
+        fogColor.lerp(winterFog, season * 0.8);
+        ambientColor.lerp(winterAmbient, season * 0.4);
+    }
 
     scene.background.copy(skyColor);
     scene.fog.color.copy(fogColor);

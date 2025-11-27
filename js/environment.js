@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { state, params } from './state.js';
+import { state, config } from './appState.js';
+console.log("Environment module loaded, config:", config);
 
 function createFogTexture() {
     const canvas = document.createElement('canvas');
@@ -102,13 +103,15 @@ export function createWater(scene) {
         waterColor: { value: new THREE.Color(0x001e0f) },
         skyColor: { value: new THREE.Color(0x87CEEB) },
         fogColor: { value: new THREE.Color(0x87CEEB) },
-        fogDensity: { value: 0.002 }
+        fogDensity: { value: 0.002 },
+        windSpeed: { value: 1.0 }
     };
 
     const material = new THREE.ShaderMaterial({
         uniforms: waterUniforms,
         vertexShader: `
             uniform float time;
+            uniform float windSpeed;
             varying vec3 vWorldPosition;
             varying vec3 vViewPosition;
             varying vec3 vNormal;
@@ -133,16 +136,19 @@ export function createWater(scene) {
                 
                 vec3 pos = position;
                 // Waves
-                float wave1 = sin(pos.x * 0.01 + time) * 2.0;
-                float wave2 = cos(pos.z * 0.01 + time * 0.8) * 2.0;
-                float wave3 = noise(pos.xz * 0.02 + time) * 3.0;
+                float waveAmp = 1.0 + windSpeed * 0.5;
+                float waveFreq = 1.0 + windSpeed * 0.2;
+                
+                float wave1 = sin(pos.x * 0.01 * waveFreq + time * waveFreq) * 2.0 * waveAmp;
+                float wave2 = cos(pos.z * 0.01 * waveFreq + time * 0.8 * waveFreq) * 2.0 * waveAmp;
+                float wave3 = noise(pos.xz * 0.02 + time * waveFreq) * 3.0 * waveAmp;
                 
                 pos.y += wave1 + wave2 + wave3;
                 
                 // Approximate normal
                 vec3 n = vec3(0.0, 1.0, 0.0);
-                n.x = -cos(pos.x * 0.01 + time) * 0.05;
-                n.z = sin(pos.z * 0.01 + time * 0.8) * 0.05;
+                n.x = -cos(pos.x * 0.01 * waveFreq + time * waveFreq) * 0.05 * waveAmp;
+                n.z = sin(pos.z * 0.01 * waveFreq + time * 0.8 * waveFreq) * 0.05 * waveAmp;
                 vNormal = normalize(n);
 
                 vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
@@ -228,9 +234,33 @@ export function createTerrain(scene) {
         roughness: 0.8
     });
 
-    const terrain = new THREE.Mesh(geometry, material);
-    terrain.receiveShadow = true;
-    scene.add(terrain);
+    state.terrain = new THREE.Mesh(geometry, material);
+    state.terrain.receiveShadow = true;
+    scene.add(state.terrain);
+}
+
+export function updateTerrain() {
+    if (!state.terrain) return;
+
+    const season = config.season;
+    const material = state.terrain.material;
+
+    const summerColor = new THREE.Color(0x556633);
+    const autumnColor = new THREE.Color(0x8B4513);
+    const winterColor = new THREE.Color(0xFFFFFF);
+
+    let targetColor;
+    if (season < 0.5) {
+        // Summer -> Autumn
+        const t = season * 2;
+        targetColor = summerColor.lerp(autumnColor, t);
+    } else {
+        // Autumn -> Winter
+        const t = (season - 0.5) * 2;
+        targetColor = autumnColor.lerp(winterColor, t);
+    }
+
+    material.color.copy(targetColor);
 }
 
 export function createCity(scene) {
@@ -319,7 +349,7 @@ export function createClouds(scene) {
 }
 
 export function updateFog(scene) {
-    const density = params.fogDensity / 100; // 0 to 1
+    const density = config.fogDensity / 100; // 0 to 1
     if (state.fogSystem) {
         state.fogSystem.visible = density > 0.0;
         if (state.fogUniforms) {
@@ -329,8 +359,95 @@ export function updateFog(scene) {
 
     // Also update standard fog for distance
     scene.fog.density = density * 0.004; // Increased base smooth fog
+}
 
-    if (state.water) {
-        state.water.material.uniforms.fogDensity.value = scene.fog.density;
+export function createPrecipitation(scene) {
+    const count = 15000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = [];
+    const velocities = [];
+
+    for (let i = 0; i < count; i++) {
+        positions.push((Math.random() - 0.5) * 3000, Math.random() * 1000, (Math.random() - 0.5) * 3000);
+        velocities.push(0, -1, 0); // Base velocity
     }
+
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 3));
+
+    const material = new THREE.PointsMaterial({
+        color: 0xaaaaaa,
+        size: 2,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    state.precipitationSystem = new THREE.Points(geometry, material);
+    state.precipitationSystem.visible = false;
+    scene.add(state.precipitationSystem);
+}
+
+export function updatePrecipitation(dt) {
+    if (!state.precipitationSystem) return;
+
+    const intensity = config.weatherIntensity;
+    if (intensity <= 0.01) {
+        state.precipitationSystem.visible = false;
+        return;
+    }
+
+    state.precipitationSystem.visible = true;
+    const positions = state.precipitationSystem.geometry.attributes.position.array;
+    const count = positions.length / 3;
+
+    // Determine type based on season (simple temp proxy)
+    // Season 0.8+ is winter/snow
+    const isSnow = config.season > 0.75;
+
+    // Update material appearance
+    const material = state.precipitationSystem.material;
+    if (isSnow) {
+        material.color.setHex(0xffffff);
+        material.size = 4;
+        material.opacity = 0.8 * intensity;
+    } else {
+        material.color.setHex(0xaaaaaa);
+        material.size = 2;
+        material.opacity = 0.6 * intensity;
+    }
+
+    const wind = config.windDirection.clone().multiplyScalar(config.windSpeed * (isSnow ? 5 : 2));
+    const fallSpeed = isSnow ? 50 : 200;
+
+    for (let i = 0; i < count; i++) {
+        let x = positions[i * 3];
+        let y = positions[i * 3 + 1];
+        let z = positions[i * 3 + 2];
+
+        // Movement
+        x += wind.x * dt;
+        y -= fallSpeed * dt;
+        z += wind.z * dt;
+
+        // Noise/Turbulence for snow
+        if (isSnow) {
+            x += Math.sin(y * 0.05 + Date.now() * 0.001) * 20 * dt;
+            z += Math.cos(y * 0.05 + Date.now() * 0.001) * 20 * dt;
+        }
+
+        // Wrap
+        if (y < -50) y = 1000;
+        if (x > 1500) x -= 3000;
+        if (x < -1500) x += 3000;
+        if (z > 1500) z -= 3000;
+        if (z < -1500) z += 3000;
+
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+    }
+
+    state.precipitationSystem.geometry.attributes.position.needsUpdate = true;
 }

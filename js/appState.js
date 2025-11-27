@@ -1,12 +1,21 @@
 import * as THREE from 'three';
 
-export const params = {
-    time: 12,
+console.log("State module loaded");
+
+export let config = {
+    time: 13,
     fogDensity: 20,
     trafficDensity: 50,
     zoom: 50,
-    speedMultiplier: 1.0
+    speedMultiplier: 1.0,
+    season: 0.0, // 0 = Summer, 1 = Winter
+    weatherIntensity: 0.0, // 0 = Clear, 1 = Storm
+    windSpeed: 1.0,
+    windDirection: new THREE.Vector3(1, 0, 0.5).normalize()
 };
+
+window.config = config;
+console.log("Config loaded:", config);
 
 export const colors = {
     dawn: { sky: new THREE.Color(0xffaa55), fog: new THREE.Color(0xffaa55), sun: new THREE.Color(0xffaa00), ambient: new THREE.Color(0x886644), hemi: new THREE.Color(0xffaa55) },
@@ -35,5 +44,7 @@ export const state = {
     dummyParticle: new THREE.Object3D(),
     birdMesh: null,
     cloudMesh: null,
-    clouds: []
+    clouds: [],
+    precipitationSystem: null,
+    precipitationData: []
 };
