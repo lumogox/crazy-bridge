@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { state, config } from './appState.js';
+import { getWaterHeight, getWaterNormal } from './waveMath.js';
 
 // --- Traffic System ---
 
@@ -482,17 +483,13 @@ export function createShips(scene) {
     }
 }
 
-export function updateShips(dt) {
-    state.ships.forEach(ship => {
-        ship.position.z += ship.userData.speed * ship.userData.dir * dt;
-        if (ship.position.z > 2000) ship.position.z = -2000;
-        if (ship.position.z < -2000) ship.position.z = 2000;
-    });
-}
 
-export function createBirds(scene) {
-    const count = 100;
-    const geometry = new THREE.ConeGeometry(0.5, 2, 4);
+// ... (existing imports)
+
+// ... (existing code)
+
+export function updateShips(dt) {
+    const time = performance.now() * 0.001;
     geometry.rotateX(Math.PI / 2);
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
