@@ -483,13 +483,28 @@ export function createShips(scene) {
     }
 }
 
-
-// ... (existing imports)
-
-// ... (existing code)
-
 export function updateShips(dt) {
     const time = performance.now() * 0.001;
+    state.ships.forEach(ship => {
+        const speed = ship.userData.speed;
+        const dir = ship.userData.dir;
+
+        ship.position.z += speed * dir * dt;
+
+        // Bobbing
+        ship.position.y = -10 + Math.sin(time + ship.position.x) * 1.0;
+        ship.rotation.x = Math.sin(time * 0.5 + ship.position.z * 0.01) * 0.05;
+        ship.rotation.z = Math.sin(time * 0.3 + ship.position.x * 0.01) * 0.05;
+
+        // Wrap
+        if (ship.position.z > 1000) ship.position.z = -1000;
+        if (ship.position.z < -1000) ship.position.z = 1000;
+    });
+}
+
+export function createBirds(scene) {
+    const count = 100;
+    const geometry = new THREE.ConeGeometry(0.5, 2, 4);
     geometry.rotateX(Math.PI / 2);
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
