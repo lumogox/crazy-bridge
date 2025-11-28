@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { state, config } from './appState.js';
 import { getWaterHeight, getWaterNormal } from './waveMath.js';
+import { checkVolcanoCollision, checkLavaCollision } from './disasters.js'; // [CHANGE] Import both
 
 // --- Traffic System ---
 
@@ -220,6 +221,15 @@ export function updateTraffic(dt) {
         const dir = laneIndex < 3 ? 1 : -1;
 
         laneCars.forEach((car, i) => {
+            // [CHANGE] Check for lava destruction
+            if (!car.isExploding && !car.crashed && checkLavaCollision(car)) {
+                car.crashed = true;
+                car.isExploding = true;
+                car.vy = 20 + Math.random() * 20; // Blast up
+                car.vr.set(Math.random(), Math.random(), Math.random());
+                spawnExplosion(car.x, car.y, car.z);
+            }
+
             // Explosion Logic
             if (car.isExploding) {
                 car.y += car.vy * dt;
@@ -483,13 +493,50 @@ export function createShips(scene) {
     }
 }
 
-
-// ... (existing imports)
-
-// ... (existing code)
-
 export function updateShips(dt) {
     const time = performance.now() * 0.001;
+    state.ships.forEach(ship => {
+        // [CHANGE] Check sinking status
+        if (ship.userData.sinking) {
+            ship.position.y -= 20 * dt; // Sink fast
+            ship.rotation.x += 0.5 * dt;
+            ship.rotation.z += 0.2 * dt;
+            if (ship.position.y < -150) {
+                // Reset/Respawn
+                ship.userData.sinking = false;
+                ship.position.y = -10;
+                ship.rotation.set(0, ship.userData.dir === 1 ? 0 : Math.PI, 0);
+                // Respawn far away
+                ship.position.x = (Math.random() - 0.5) * 2000;
+                ship.position.z = (Math.random() - 0.5) * 3000;
+            }
+            return;
+        }
+
+        // [CHANGE] Check volcano collision (ships hit the mountain)
+        if (checkVolcanoCollision(ship.position)) {
+            ship.userData.sinking = true;
+        }
+
+        const speed = ship.userData.speed;
+        const dir = ship.userData.dir;
+
+        ship.position.z += speed * dir * dt;
+
+        // Bobbing
+        ship.position.y = -10 + Math.sin(time + ship.position.x) * 1.0;
+        ship.rotation.x = Math.sin(time * 0.5 + ship.position.z * 0.01) * 0.05;
+        ship.rotation.z = Math.sin(time * 0.3 + ship.position.x * 0.01) * 0.05;
+
+        // Wrap
+        if (ship.position.z > 1000) ship.position.z = -1000;
+        if (ship.position.z < -1000) ship.position.z = 1000;
+    });
+}
+
+export function createBirds(scene) {
+    const count = 100;
+    const geometry = new THREE.ConeGeometry(0.5, 2, 4);
     geometry.rotateX(Math.PI / 2);
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
