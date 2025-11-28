@@ -1,6 +1,8 @@
 import { config } from './appState.js';
 import { updateTimeOfDay } from './scene.js';
 import { updateFog } from './environment.js';
+// [CHANGE] Import trigger function
+import { triggerVolcano } from './disasters.js';
 
 export function setupUI(scene, camera) {
     const timeSlider = document.getElementById('timeSlider');
@@ -64,6 +66,31 @@ export function setupUI(scene, camera) {
         windSlider = document.getElementById('windSlider');
     }
 
+    // [CHANGE] Disaster Controls
+    let disasterDiv = document.getElementById('disaster-controls');
+    if (!disasterDiv) {
+        const container = document.getElementById('ui-container');
+        disasterDiv = document.createElement('div');
+        disasterDiv.id = 'disaster-controls';
+        disasterDiv.className = 'control-group';
+        disasterDiv.style.marginTop = '20px';
+        disasterDiv.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+        disasterDiv.style.paddingTop = '10px';
+
+        disasterDiv.innerHTML = `
+            <label style="color: #ff4444; margin-bottom: 10px;">Disasters</label>
+            <div style="display: flex; gap: 10px;">
+                <button id="btnVolcano" style="flex: 1; padding: 8px; background: #552222; color: white; border: 1px solid #ff4444; border-radius: 4px; cursor: pointer; font-weight: bold;">🌋 Erupt</button>
+            </div>
+        `;
+        container.appendChild(disasterDiv);
+
+        // Add Listener
+        document.getElementById('btnVolcano').addEventListener('click', () => {
+            triggerVolcano();
+        });
+    }
+
     // Add value displays to other sliders
     function addValueDisplay(sliderId, valueId, initialValue) {
         const slider = document.getElementById(sliderId);
@@ -119,7 +146,6 @@ export function setupUI(scene, camera) {
         if (val > 0.25) text = "Autumn";
         if (val > 0.75) text = "Winter";
         document.getElementById('seasonValue').textContent = text;
-        // Trigger environment update if needed immediately, or let loop handle it
     });
 
     precipSlider.addEventListener('input', (e) => {
