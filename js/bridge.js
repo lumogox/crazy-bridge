@@ -1,6 +1,38 @@
 import * as THREE from 'three';
 import { state } from './appState.js';
 
+// Map to store voxel data for gameplay logic (destruction, collision)
+// Key: "x,z" (rounded to grid) -> Value: { mesh: THREE.InstancedMesh, index: number }[]
+export const bridgeVoxelMap = new Map();
+
+// Grid size for voxels
+const GRID_SIZE = 10;
+
+export function getVoxelKey(x, z) {
+    const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+    const gz = Math.floor(z / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+    return `${gx},${gz}`;
+}
+
+export function removeVoxelAt(x, z) {
+    const key = getVoxelKey(x, z);
+    if (bridgeVoxelMap.has(key)) {
+        const voxels = bridgeVoxelMap.get(key);
+        const dummy = new THREE.Object3D();
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+
+        voxels.forEach(v => {
+            v.mesh.setMatrixAt(v.index, dummy.matrix);
+            v.mesh.instanceMatrix.needsUpdate = true;
+        });
+
+        bridgeVoxelMap.delete(key);
+        return true;
+    }
+    return false;
+}
+
 export function createBridge(scene) {
     const bridgeGroup = new THREE.Group();
     scene.add(bridgeGroup);
@@ -8,8 +40,8 @@ export function createBridge(scene) {
     const orangeMaterial = new THREE.MeshStandardMaterial({ color: 0xf04a00, roughness: 0.4 });
     const greyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
 
-    function createInstancedVoxels(data, material) {
-        if (data.length === 0) return;
+    function createInstancedVoxels(data, material, isDynamic = false) {
+        if (data.length === 0) return null;
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const mesh = new THREE.InstancedMesh(geometry, material, data.length);
         const dummy = new THREE.Object3D();
@@ -19,6 +51,15 @@ export function createBridge(scene) {
             dummy.scale.set(d.sx, d.sy, d.sz);
             dummy.updateMatrix();
             mesh.setMatrixAt(i, dummy.matrix);
+
+            // Register dynamic voxels in the map
+            if (isDynamic && d.isDestructible) {
+                const key = getVoxelKey(d.x, d.z);
+                if (!bridgeVoxelMap.has(key)) {
+                    bridgeVoxelMap.set(key, []);
+                }
+                bridgeVoxelMap.get(key).push({ mesh: mesh, index: i });
+            }
         });
 
         mesh.castShadow = true;
@@ -60,9 +101,42 @@ export function createBridge(scene) {
     buildTower(-towerSpacing / 2);
     buildTower(towerSpacing / 2);
 
+    // --- Voxelized Deck Generation ---
     const totalLength = 2800;
-    greyVoxels.push({ x: 0, y: deckHeight, z: 0, sx: totalLength, sy: 2, sz: 80 });
-    orangeVoxels.push({ x: 0, y: deckHeight - 5, z: 0, sx: totalLength, sy: 8, sz: 70 });
+    const bridgeWidth = 80;
+    const supportWidth = 70;
+
+    // We iterate to create small voxels for the deck instead of one big block
+    const xStart = -totalLength / 2;
+    const xEnd = totalLength / 2;
+    const zStart = -bridgeWidth / 2; // -40
+    const zEnd = bridgeWidth / 2;    // 40
+
+    for (let x = xStart + GRID_SIZE / 2; x < xEnd; x += GRID_SIZE) {
+        // Grey Road Surface
+        for (let z = zStart + GRID_SIZE / 2; z < zEnd; z += GRID_SIZE) {
+            greyVoxels.push({
+                x: x, y: deckHeight, z: z,
+                sx: GRID_SIZE, sy: 2, sz: GRID_SIZE,
+                isDestructible: true
+            });
+        }
+
+        // Orange Support Structure (slightly narrower)
+        // Check if this X/Z column is within support width
+        const zSupportStart = -supportWidth / 2;
+        const zSupportEnd = supportWidth / 2;
+
+        for (let z = zStart + GRID_SIZE / 2; z < zEnd; z += GRID_SIZE) {
+             if (z > zSupportStart && z < zSupportEnd) {
+                 orangeVoxels.push({
+                     x: x, y: deckHeight - 5, z: z,
+                     sx: GRID_SIZE, sy: 8, sz: GRID_SIZE,
+                     isDestructible: true
+                 });
+             }
+        }
+    }
 
     function buildCable(zOffset) {
         const segments = 200;
@@ -98,6 +172,7 @@ export function createBridge(scene) {
     buildCable(42);
     buildCable(-42);
 
-    createInstancedVoxels(orangeVoxels, orangeMaterial);
-    createInstancedVoxels(greyVoxels, greyMaterial);
+    // Pass isDynamic=true to register voxels in the map
+    createInstancedVoxels(orangeVoxels, orangeMaterial, true);
+    createInstancedVoxels(greyVoxels, greyMaterial, true);
 }

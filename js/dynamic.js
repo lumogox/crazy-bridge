@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { state, config } from './appState.js';
 import { getWaterHeight, getWaterNormal } from './waveMath.js';
-import { checkVolcanoCollision, checkLavaCollision } from './disasters.js'; // [CHANGE] Import both
+import { checkVolcanoCollision, checkLavaCollision } from './disasters.js';
+// [CHANGE] Import bridge map for ground check
+import { bridgeVoxelMap, getVoxelKey } from './bridge.js';
 
 // --- Traffic System ---
 
@@ -169,283 +171,13 @@ export function createTraffic(scene) {
             vr: new THREE.Vector3(),
             lane: lane,
             recklessness: recklessness,
-            originalColor: state.trafficData[i] ? state.trafficData[i].color : new THREE.Color().setHex(Math.random() * 0xffffff)
+            originalColor: state.trafficData[i] ? state.trafficData[i].color : new THREE.Color().setHex(Math.random() * 0xffffff),
+            isFalling: false // [CHANGE] New state for falling through bridge
         });
 
         // Set color
         state.carMeshes[type].body.setColorAt(i, state.trafficData[i].originalColor);
     }
-}
-
-export function updateTraffic(dt) {
-    if (!state.carMeshes.sedan) return; // Check if initialized
-
-    const dummy = new THREE.Object3D();
-    const dummyL = new THREE.Object3D();
-    const mapWidth = 3000;
-
-    // Density Control
-    // Only process the first N cars based on density
-    const activeCount = Math.floor(state.trafficData.length * config.trafficDensity);
-    const activeCars = state.trafficData.slice(0, activeCount);
-
-    // Hide inactive cars
-    for (let i = activeCount; i < state.trafficData.length; i++) {
-        const car = state.trafficData[i];
-        const meshes = state.carMeshes[car.type];
-        dummy.scale.set(0, 0, 0);
-        dummy.updateMatrix();
-        meshes.body.setMatrixAt(car.typeIndex, dummy.matrix);
-        meshes.windows.setMatrixAt(car.typeIndex, dummy.matrix);
-        meshes.wheels.setMatrixAt(car.typeIndex, dummy.matrix);
-        state.headlightMesh.setMatrixAt(car.typeIndex * 2, dummy.matrix);
-        state.headlightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummy.matrix);
-        state.taillightMesh.setMatrixAt(car.typeIndex * 2, dummy.matrix);
-        state.taillightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummy.matrix);
-    }
-
-    // Spatial Partitioning: Sort cars by lane and position
-    const lanes = [[], [], [], [], [], []];
-    activeCars.forEach(car => lanes[car.lane].push(car));
-
-    // Sort each lane
-    lanes.forEach(lane => lane.sort((a, b) => a.x - b.x));
-
-    // Fog Crash Logic
-    const fogFactor = config.fogDensity / 100; // 0.0 to 1.0
-    const crashMultiplier = 1 + fogFactor * 10; // 1x to 11x (1000% increase)
-    const speedMult = config.speedMultiplier;
-
-    // Physics Loop
-    lanes.forEach((laneCars, laneIndex) => {
-        const dir = laneIndex < 3 ? 1 : -1;
-
-        laneCars.forEach((car, i) => {
-            // [CHANGE] Check for lava destruction
-            if (!car.isExploding && !car.crashed && checkLavaCollision(car)) {
-                car.crashed = true;
-                car.isExploding = true;
-                car.vy = 20 + Math.random() * 20; // Blast up
-                car.vr.set(Math.random(), Math.random(), Math.random());
-                spawnExplosion(car.x, car.y, car.z);
-            }
-
-            // Explosion Logic
-            if (car.isExploding) {
-                car.y += car.vy * dt;
-                car.vy -= 50 * dt; // Gravity (stronger for effect)
-
-                if (car.y < -50) {
-                    // Reset / Respawn
-                    car.isExploding = false;
-                    car.crashed = false;
-                    car.y = 69;
-                    car.velocity = 0;
-                    car.acceleration = 0;
-                    car.crashTimer = 0;
-                }
-                return; // Skip normal physics
-            }
-
-            // Sticky Crash Logic
-            if (car.crashTimer > 0) {
-                car.crashTimer -= dt;
-                car.velocity = 0;
-                car.acceleration = 0;
-                car.crashed = true; // Ensure flag is set
-                // Skip physics update for this car
-            } else {
-                car.crashed = false; // Recovered
-
-                // Find target car ahead
-                let target = null;
-                if (dir === 1) {
-                    if (i < laneCars.length - 1) target = laneCars[i + 1];
-                    else target = laneCars[0]; // Wrap: Leader looks at first car (which is far behind/ahead in loop)
-                } else {
-                    if (i > 0) target = laneCars[i - 1];
-                    else target = laneCars[laneCars.length - 1]; // Wrap
-                }
-
-                // Calculate Gap with Map Wrapping
-                let gap = 10000;
-                let targetVel = car.maxSpeed; // Default if no target (shouldn't happen with wrap logic)
-
-                if (target && target !== car) {
-                    if (dir === 1) {
-                        gap = target.x - car.x;
-                        if (gap < 0) gap += mapWidth; // Wrapped
-                    } else {
-                        gap = car.x - target.x;
-                        if (gap < 0) gap += mapWidth; // Wrapped
-                    }
-                    gap -= (target.length / 2 + car.length / 2);
-                    targetVel = target.velocity;
-                }
-
-                // Dynamic Safe Distance (Time Headway)
-                const timeHeadway = 1.5; // seconds
-                const minGap = 4.0; // meters
-                const desiredGap = minGap + car.velocity * timeHeadway;
-
-                // IDM-like Logic
-                const effectiveMaxSpeed = car.maxSpeed * speedMult;
-                let freeRoadAccel = car.throttleForce * speedMult * (1 - Math.pow(car.velocity / effectiveMaxSpeed, 4));
-
-                // Braking term
-                let brakingTerm = 0;
-                if (gap < desiredGap) {
-                    // We are too close
-                    const ratio = desiredGap / Math.max(0.1, gap);
-                    brakingTerm = -car.brakingForce * (ratio * ratio);
-
-                    // Dampening: If target is faster, reduce braking
-                    if (targetVel > car.velocity) {
-                        brakingTerm *= 0.5;
-                    }
-
-                    // Distraction (Reckless drivers might ignore braking)
-                    let isDistracted = false;
-
-                    // Sticky Distraction Check
-                    if (car.distractionTimer > 0) {
-                        car.distractionTimer -= dt;
-                        isDistracted = true;
-                    } else {
-                        // Chance to start distraction
-                        let startDistraction = false;
-                        // Reckless drivers: Base 5% * multiplier
-                        if (car.recklessness > 0.8 && Math.random() < 0.05 * crashMultiplier) {
-                            startDistraction = true;
-                        }
-                        // Normal drivers in heavy fog: Small chance if fog > 50%
-                        if (fogFactor > 0.5 && Math.random() < 0.005 * crashMultiplier) {
-                            startDistraction = true;
-                        }
-
-                        if (startDistraction) {
-                            car.distractionTimer = 1.0 + Math.random(); // Distracted for 1-2 seconds
-                            isDistracted = true;
-                        }
-                    }
-
-                    if (isDistracted) {
-                        brakingTerm = 0; // Oops, didn't see you there!
-                        // Aggressive Distraction: Gas it!
-                        freeRoadAccel = car.throttleForce * speedMult * 3;
-                    }
-                }
-
-                car.acceleration = freeRoadAccel + brakingTerm;
-
-                // Restart Logic: If stopped and gap is large, ensure positive acceleration
-                if (car.velocity < 0.5 && gap > minGap + 5) {
-                    car.acceleration = Math.max(car.acceleration, 5.0 * speedMult);
-                }
-
-                // Collision
-                if (gap <= 0.5) { // Increased tolerance slightly
-                    car.crashed = true;
-                    car.crashTimer = 5.0; // Stuck for 5 seconds
-                    car.velocity = 0;
-                    car.acceleration = 0;
-
-                    // EXPLOSION CHECK
-                    if (speedMult > 2.0) {
-                        car.isExploding = true;
-                        car.vy = 10 * speedMult + Math.random() * 10; // Launch up!
-                        car.vr.set(Math.random(), Math.random(), Math.random()); // Spin
-                        spawnExplosion(car.x, car.y, car.z);
-                    }
-                }
-
-                // Integration
-                car.velocity += car.acceleration * dt;
-                if (car.velocity < 0) car.velocity = 0; // No reversing
-                if (car.velocity > effectiveMaxSpeed * 1.5) car.velocity = effectiveMaxSpeed * 1.5; // Cap speed sanity check
-
-                car.x += car.velocity * dir * dt;
-
-                // Wrap Position
-                if (car.x > 1500) car.x -= 3000;
-                if (car.x < -1500) car.x += 3000;
-            }
-
-            // Visual Update
-            const visible = true;
-            const scale = visible ? 1 : 0;
-
-            dummy.position.set(car.x, car.y, car.z);
-            dummy.rotation.set(0, car.dir > 0 ? 0 : Math.PI, 0);
-
-            // Reckless Wobble
-            if (car.recklessness > 0.8 && !car.crashed) {
-                dummy.position.x += Math.sin(Date.now() * 0.01 + car.typeIndex) * 2.0; // Increased Weaving
-            }
-
-            if (car.crashed) {
-                // Visual damage
-                dummy.rotation.y += 0.2; // Crooked
-                dummy.rotation.z = 0.1 * car.dir; // Tilted
-                dummy.position.y += 0.2; // Hop up
-
-                if (car.isExploding) {
-                    dummy.rotation.x += car.vr.x * Date.now() * 0.01;
-                    dummy.rotation.y += car.vr.y * Date.now() * 0.01;
-                    dummy.rotation.z += car.vr.z * Date.now() * 0.01;
-                }
-
-                // Turn RED
-                state.carMeshes[car.type].body.setColorAt(car.typeIndex, new THREE.Color(0xff0000));
-            } else {
-                // Restore color
-                state.carMeshes[car.type].body.setColorAt(car.typeIndex, car.originalColor);
-            }
-            state.carMeshes[car.type].body.instanceColor.needsUpdate = true;
-
-            dummy.scale.set(scale, scale, scale);
-            dummy.updateMatrix();
-
-            // Update the specific car mesh
-            const meshes = state.carMeshes[car.type];
-            meshes.body.setMatrixAt(car.typeIndex, dummy.matrix);
-            meshes.windows.setMatrixAt(car.typeIndex, dummy.matrix);
-            meshes.wheels.setMatrixAt(car.typeIndex, dummy.matrix);
-
-            // Headlights/Taillights
-            // Left
-            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z + 0.8);
-            dummyL.scale.set(scale, scale, scale);
-            dummyL.updateMatrix();
-            state.headlightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
-            // Right
-            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z - 0.8);
-            dummyL.scale.set(scale, scale, scale);
-            dummyL.updateMatrix();
-            state.headlightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
-
-            // Taillights
-            // Left
-            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z + 0.8);
-            dummyL.scale.set(scale, scale, scale);
-            dummyL.updateMatrix();
-            state.taillightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
-            // Right
-            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z - 0.8);
-            dummyL.scale.set(scale, scale, scale);
-            dummyL.updateMatrix();
-            state.taillightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
-        });
-    });
-
-    // Update all meshes
-    Object.values(state.carMeshes).forEach(m => {
-        m.body.instanceMatrix.needsUpdate = true;
-        m.windows.instanceMatrix.needsUpdate = true;
-        m.wheels.instanceMatrix.needsUpdate = true;
-    });
-    state.headlightMesh.instanceMatrix.needsUpdate = true;
-    state.taillightMesh.instanceMatrix.needsUpdate = true;
 }
 
 export function createShips(scene) {
@@ -579,6 +311,313 @@ export function updateBirds(dt) {
     state.birdMesh.instanceMatrix.needsUpdate = true;
 }
 
+export function updateTraffic(dt) {
+    if (!state.carMeshes.sedan) return; // Check if initialized
+
+    const dummy = new THREE.Object3D();
+    const dummyL = new THREE.Object3D();
+    const mapWidth = 3000;
+
+    // Density Control
+    // Only process the first N cars based on density
+    const activeCount = Math.floor(state.trafficData.length * config.trafficDensity);
+    const activeCars = state.trafficData.slice(0, activeCount);
+
+    // Hide inactive cars
+    for (let i = activeCount; i < state.trafficData.length; i++) {
+        const car = state.trafficData[i];
+        const meshes = state.carMeshes[car.type];
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        meshes.body.setMatrixAt(car.typeIndex, dummy.matrix);
+        meshes.windows.setMatrixAt(car.typeIndex, dummy.matrix);
+        meshes.wheels.setMatrixAt(car.typeIndex, dummy.matrix);
+        state.headlightMesh.setMatrixAt(car.typeIndex * 2, dummy.matrix);
+        state.headlightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummy.matrix);
+        state.taillightMesh.setMatrixAt(car.typeIndex * 2, dummy.matrix);
+        state.taillightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummy.matrix);
+    }
+
+    // Spatial Partitioning: Sort cars by lane and position
+    const lanes = [[], [], [], [], [], []];
+    activeCars.forEach(car => lanes[car.lane].push(car));
+
+    // Sort each lane
+    lanes.forEach(lane => lane.sort((a, b) => a.x - b.x));
+
+    // Fog Crash Logic
+    const fogFactor = config.fogDensity / 100; // 0.0 to 1.0
+    const crashMultiplier = 1 + fogFactor * 10; // 1x to 11x (1000% increase)
+    const speedMult = config.speedMultiplier;
+
+    // Physics Loop
+    lanes.forEach((laneCars, laneIndex) => {
+        const dir = laneIndex < 3 ? 1 : -1;
+
+        laneCars.forEach((car, i) => {
+            // [CHANGE] Check for Ground Logic
+            if (!car.isFalling && !car.isExploding) {
+                const key = getVoxelKey(car.x, car.z);
+                // Check if ground exists at this location.
+                // We check if the key exists in the map.
+                if (!bridgeVoxelMap.has(key)) {
+                    car.isFalling = true;
+                    car.crashed = true; // Mark as crashed visually (red, etc)
+                    car.velocity *= 0.8; // Maintain some forward momentum but slow down
+                }
+            }
+
+            // Falling Logic
+            if (car.isFalling) {
+                car.y -= 20 * dt + (car.vy || 0);
+                car.vy = (car.vy || 0) + 9.8 * dt; // Gravity
+                car.x += car.velocity * dir * dt;
+
+                // Tilt while falling
+                car.vr.x += dt;
+
+                if (car.y < -20) {
+                     // Splash or Reset
+                     car.isFalling = false;
+                     car.crashed = false;
+                     car.y = 69;
+                     car.velocity = 0;
+                     car.acceleration = 0;
+                     car.crashTimer = 0;
+                     // Random respawn x
+                     car.x = (Math.random() - 0.5) * 3000;
+                }
+                // Skip other physics
+            }
+            else if (car.isExploding) {
+                // Explosion Logic
+                car.y += car.vy * dt;
+                car.vy -= 50 * dt; // Gravity (stronger for effect)
+
+                if (car.y < -50) {
+                    // Reset / Respawn
+                    car.isExploding = false;
+                    car.crashed = false;
+                    car.y = 69;
+                    car.velocity = 0;
+                    car.acceleration = 0;
+                    car.crashTimer = 0;
+                }
+                // return; // Skip normal physics (let the visualization block below handle it)
+            }
+            else {
+
+                // [CHANGE] Check for lava destruction (only if not falling/exploding)
+                if (!car.crashed && checkLavaCollision(car)) {
+                    car.crashed = true;
+                    car.isExploding = true;
+                    car.vy = 20 + Math.random() * 20; // Blast up
+                    car.vr.set(Math.random(), Math.random(), Math.random());
+                    spawnExplosion(car.x, car.y, car.z);
+                }
+
+                // Sticky Crash Logic
+                if (car.crashTimer > 0) {
+                    car.crashTimer -= dt;
+                    car.velocity = 0;
+                    car.acceleration = 0;
+                    car.crashed = true; // Ensure flag is set
+                    // Skip physics update for this car
+                } else {
+                    car.crashed = false; // Recovered
+
+                    // Find target car ahead
+                    let target = null;
+                    if (dir === 1) {
+                        if (i < laneCars.length - 1) target = laneCars[i + 1];
+                        else target = laneCars[0]; // Wrap: Leader looks at first car (which is far behind/ahead in loop)
+                    } else {
+                        if (i > 0) target = laneCars[i - 1];
+                        else target = laneCars[laneCars.length - 1]; // Wrap
+                    }
+
+                    // Calculate Gap with Map Wrapping
+                    let gap = 10000;
+                    let targetVel = car.maxSpeed; // Default if no target (shouldn't happen with wrap logic)
+
+                    if (target && target !== car) {
+                        if (dir === 1) {
+                            gap = target.x - car.x;
+                            if (gap < 0) gap += mapWidth; // Wrapped
+                        } else {
+                            gap = car.x - target.x;
+                            if (gap < 0) gap += mapWidth; // Wrapped
+                        }
+                        gap -= (target.length / 2 + car.length / 2);
+                        targetVel = target.velocity;
+                    }
+
+                    // Dynamic Safe Distance (Time Headway)
+                    const timeHeadway = 1.5; // seconds
+                    const minGap = 4.0; // meters
+                    const desiredGap = minGap + car.velocity * timeHeadway;
+
+                    // IDM-like Logic
+                    const effectiveMaxSpeed = car.maxSpeed * speedMult;
+                    let freeRoadAccel = car.throttleForce * speedMult * (1 - Math.pow(car.velocity / effectiveMaxSpeed, 4));
+
+                    // Braking term
+                    let brakingTerm = 0;
+                    if (gap < desiredGap) {
+                        // We are too close
+                        const ratio = desiredGap / Math.max(0.1, gap);
+                        brakingTerm = -car.brakingForce * (ratio * ratio);
+
+                        // Dampening: If target is faster, reduce braking
+                        if (targetVel > car.velocity) {
+                            brakingTerm *= 0.5;
+                        }
+
+                        // Distraction (Reckless drivers might ignore braking)
+                        let isDistracted = false;
+
+                        // Sticky Distraction Check
+                        if (car.distractionTimer > 0) {
+                            car.distractionTimer -= dt;
+                            isDistracted = true;
+                        } else {
+                            // Chance to start distraction
+                            let startDistraction = false;
+                            // Reckless drivers: Base 5% * multiplier
+                            if (car.recklessness > 0.8 && Math.random() < 0.05 * crashMultiplier) {
+                                startDistraction = true;
+                            }
+                            // Normal drivers in heavy fog: Small chance if fog > 50%
+                            if (fogFactor > 0.5 && Math.random() < 0.005 * crashMultiplier) {
+                                startDistraction = true;
+                            }
+
+                            if (startDistraction) {
+                                car.distractionTimer = 1.0 + Math.random(); // Distracted for 1-2 seconds
+                                isDistracted = true;
+                            }
+                        }
+
+                        if (isDistracted) {
+                            brakingTerm = 0; // Oops, didn't see you there!
+                            // Aggressive Distraction: Gas it!
+                            freeRoadAccel = car.throttleForce * speedMult * 3;
+                        }
+                    }
+
+                    car.acceleration = freeRoadAccel + brakingTerm;
+
+                    // Restart Logic: If stopped and gap is large, ensure positive acceleration
+                    if (car.velocity < 0.5 && gap > minGap + 5) {
+                        car.acceleration = Math.max(car.acceleration, 5.0 * speedMult);
+                    }
+
+                    // Collision
+                    if (gap <= 0.5) { // Increased tolerance slightly
+                        car.crashed = true;
+                        car.crashTimer = 5.0; // Stuck for 5 seconds
+                        car.velocity = 0;
+                        car.acceleration = 0;
+
+                        // EXPLOSION CHECK
+                        if (speedMult > 2.0) {
+                            car.isExploding = true;
+                            car.vy = 10 * speedMult + Math.random() * 10; // Launch up!
+                            car.vr.set(Math.random(), Math.random(), Math.random()); // Spin
+                            spawnExplosion(car.x, car.y, car.z);
+                        }
+                    }
+
+                    // Integration
+                    car.velocity += car.acceleration * dt;
+                    if (car.velocity < 0) car.velocity = 0; // No reversing
+                    if (car.velocity > effectiveMaxSpeed * 1.5) car.velocity = effectiveMaxSpeed * 1.5; // Cap speed sanity check
+
+                    car.x += car.velocity * dir * dt;
+
+                    // Wrap Position
+                    if (car.x > 1500) car.x -= 3000;
+                    if (car.x < -1500) car.x += 3000;
+                }
+            }
+
+            // Visual Update
+            const visible = true;
+            const scale = visible ? 1 : 0;
+
+            dummy.position.set(car.x, car.y, car.z);
+            dummy.rotation.set(0, car.dir > 0 ? 0 : Math.PI, 0);
+
+            // Reckless Wobble
+            if (car.recklessness > 0.8 && !car.crashed) {
+                dummy.position.x += Math.sin(Date.now() * 0.01 + car.typeIndex) * 2.0; // Increased Weaving
+            }
+
+            if (car.crashed) {
+                // Visual damage
+                dummy.rotation.y += 0.2; // Crooked
+                dummy.rotation.z = 0.1 * car.dir; // Tilted
+                dummy.position.y += 0.2; // Hop up
+
+                if (car.isExploding || car.isFalling) {
+                    dummy.rotation.x += (car.vr.x || 0.1) * Date.now() * 0.01;
+                    dummy.rotation.y += (car.vr.y || 0.1) * Date.now() * 0.01;
+                    dummy.rotation.z += (car.vr.z || 0.1) * Date.now() * 0.01;
+                }
+
+                // Turn RED
+                state.carMeshes[car.type].body.setColorAt(car.typeIndex, new THREE.Color(0xff0000));
+            } else {
+                // Restore color
+                state.carMeshes[car.type].body.setColorAt(car.typeIndex, car.originalColor);
+            }
+            state.carMeshes[car.type].body.instanceColor.needsUpdate = true;
+
+            dummy.scale.set(scale, scale, scale);
+            dummy.updateMatrix();
+
+            // Update the specific car mesh
+            const meshes = state.carMeshes[car.type];
+            meshes.body.setMatrixAt(car.typeIndex, dummy.matrix);
+            meshes.windows.setMatrixAt(car.typeIndex, dummy.matrix);
+            meshes.wheels.setMatrixAt(car.typeIndex, dummy.matrix);
+
+            // Headlights/Taillights
+            // Left
+            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z + 0.8);
+            dummyL.scale.set(scale, scale, scale);
+            dummyL.updateMatrix();
+            state.headlightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
+            // Right
+            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z - 0.8);
+            dummyL.scale.set(scale, scale, scale);
+            dummyL.updateMatrix();
+            state.headlightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
+
+            // Taillights
+            // Left
+            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z + 0.8);
+            dummyL.scale.set(scale, scale, scale);
+            dummyL.updateMatrix();
+            state.taillightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
+            // Right
+            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z - 0.8);
+            dummyL.scale.set(scale, scale, scale);
+            dummyL.updateMatrix();
+            state.taillightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
+        });
+    });
+
+    // Update all meshes
+    Object.values(state.carMeshes).forEach(m => {
+        m.body.instanceMatrix.needsUpdate = true;
+        m.windows.instanceMatrix.needsUpdate = true;
+        m.wheels.instanceMatrix.needsUpdate = true;
+    });
+    state.headlightMesh.instanceMatrix.needsUpdate = true;
+    state.taillightMesh.instanceMatrix.needsUpdate = true;
+}
+
 export function createStreetLights(scene) {
     const count = 60; // 30 per side
     const poleGeo = new THREE.CylinderGeometry(0.2, 0.2, 8, 8);
@@ -639,6 +678,10 @@ export function createParticles(scene) {
             color: new THREE.Color()
         });
     }
+
+    // [CHANGE] Expose spawnExplosion to global state for disasters
+    if (!state.callbacks) state.callbacks = {};
+    state.callbacks.spawnExplosion = spawnExplosion;
 }
 
 export function spawnExplosion(x, y, z) {

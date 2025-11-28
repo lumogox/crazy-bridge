@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { state } from './appState.js';
+import { removeVoxelAt, getVoxelKey } from './bridge.js';
 
 // --- Volcano Logic ---
 
 export function initDisasters(scene) {
     createVolcano(scene);
+    // Meteor initialization (if any needed, e.g., container) is handled dynamically
 }
 
 function createVolcano(scene) {
@@ -76,6 +78,7 @@ export function triggerVolcano() {
 
 export function updateDisasters(dt, scene) {
     updateVolcano(dt, scene);
+    updateMeteors(dt, scene);
 }
 
 // [CHANGE] Helper for collisions
@@ -215,6 +218,117 @@ function updateLavaParticles(dt, vol) {
 
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
+    });
+
+    if (needsUpdate) {
+        mesh.instanceMatrix.needsUpdate = true;
+    }
+}
+
+// --- Meteor Logic ---
+
+export function triggerMeteorShower() {
+    const met = state.disasters.meteors;
+    if (met.active) return;
+    met.active = true;
+    // We will spawn particles over time in updateMeteors
+}
+
+function createMeteorVisuals(scene) {
+    if (state.disasters.meteors.mesh) return;
+
+    // Meteors
+    const geo = new THREE.SphereGeometry(2, 8, 8);
+    // Glowing hot material
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffdd88 });
+
+    // We can use an InstancedMesh if we have many, or just regular meshes if few.
+    // Let's use InstancedMesh for performance if we want a "shower".
+    const mesh = new THREE.InstancedMesh(geo, mat, 100);
+    scene.add(mesh);
+
+    state.disasters.meteors.mesh = mesh;
+
+    const dummy = new THREE.Object3D();
+    dummy.scale.set(0,0,0);
+    dummy.updateMatrix();
+    for(let i=0; i<100; i++) {
+        mesh.setMatrixAt(i, dummy.matrix);
+        state.disasters.meteors.particles.push({
+            active: false,
+            pos: new THREE.Vector3(),
+            vel: new THREE.Vector3(),
+            target: new THREE.Vector3()
+        });
+    }
+}
+
+function updateMeteors(dt, scene) {
+    const met = state.disasters.meteors;
+    if (!met.active) return;
+
+    if (!met.mesh) createMeteorVisuals(scene);
+
+    const dummy = new THREE.Object3D();
+    const mesh = met.mesh;
+    let needsUpdate = false;
+
+    // Spawn new meteors randomly
+    if (Math.random() < 0.1) { // Spawn rate
+        for(let i=0; i<met.particles.length; i++) {
+            if(!met.particles[i].active) {
+                const p = met.particles[i];
+                p.active = true;
+
+                // Pick a target on the bridge
+                // Bridge length -1400 to 1400, Width -40 to 40
+                const tx = (Math.random() - 0.5) * 2800;
+                const tz = (Math.random() - 0.5) * 80;
+                p.target.set(tx, 67, tz); // Deck height
+
+                // Spawn high up
+                p.pos.set(tx + (Math.random()-0.5)*500, 800 + Math.random()*200, tz + (Math.random()-0.5)*500);
+
+                // Velocity towards target
+                p.vel.subVectors(p.target, p.pos).normalize().multiplyScalar(400); // Fast speed
+
+                break; // Spawn one at a time
+            }
+        }
+    }
+
+    met.particles.forEach((p, i) => {
+        if (p.active) {
+            const lastPos = p.pos.clone();
+            p.pos.addScaledVector(p.vel, dt);
+
+            // Check if passed target Y (impact)
+            if (p.pos.y <= p.target.y && lastPos.y > p.target.y) {
+                // Impact!
+                p.active = false;
+                dummy.scale.set(0,0,0);
+                needsUpdate = true;
+
+                // Destruction
+                const destroyed = removeVoxelAt(p.target.x, p.target.z);
+
+                // Visual Explosion
+                if (state.callbacks && state.callbacks.spawnExplosion) {
+                    state.callbacks.spawnExplosion(p.target.x, p.target.y, p.target.z);
+                }
+
+            } else {
+                dummy.position.copy(p.pos);
+                dummy.scale.set(1 + Math.random(), 1 + Math.random(), 1 + Math.random()); // Flicker size
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+                needsUpdate = true;
+            }
+        } else {
+            dummy.scale.set(0,0,0);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+        }
     });
 
     if (needsUpdate) {
