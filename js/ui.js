@@ -157,4 +157,31 @@ export function setupUI(scene, camera) {
         config.windSpeed = parseFloat(e.target.value);
         document.getElementById('windValue').textContent = config.windSpeed.toFixed(1);
     });
+
+    // Mobile UI Toggle Logic
+    const uiToggle = document.getElementById('ui-toggle');
+    const uiContainer = document.getElementById('ui-container');
+
+    if (uiToggle && uiContainer) {
+        uiToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering the close listener
+            uiContainer.classList.toggle('visible');
+        });
+
+        // Close UI when clicking outside
+        document.addEventListener('click', (e) => {
+            // Only apply this logic if the UI is currently open/visible (mostly relevant for mobile)
+            if (uiContainer.classList.contains('visible')) {
+                // Check if the click was outside the UI container and outside the toggle button
+                if (!uiContainer.contains(e.target) && e.target !== uiToggle) {
+                    uiContainer.classList.remove('visible');
+                }
+            }
+        });
+
+        // Prevent clicks inside the UI from closing it
+        uiContainer.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
 }
