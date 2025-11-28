@@ -4,8 +4,8 @@ console.log("State module loaded");
 
 export let config = {
     time: 13,
-    fogDensity: 20,
-    trafficDensity: 50,
+    fogDensity: 2,
+    trafficDensity: 0.5,
     zoom: 50,
     speedMultiplier: 1.0,
     season: 0.0, // 0 = Summer, 1 = Winter

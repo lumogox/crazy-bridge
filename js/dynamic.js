@@ -13,74 +13,101 @@ function buildCarGeometries() {
     const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
     wheelGeo.rotateZ(Math.PI / 2);
 
+    const scale = 1.5;
+
     function createWheels(xOffset, zOffset) {
-        const w1 = wheelGeo.clone(); w1.translate(xOffset, 0.35, zOffset);
-        const w2 = wheelGeo.clone(); w2.translate(xOffset, 0.35, -zOffset);
-        const w3 = wheelGeo.clone(); w3.translate(-xOffset, 0.35, zOffset);
-        const w4 = wheelGeo.clone(); w4.translate(-xOffset, 0.35, -zOffset);
+        // Scale first, then translate
+        const w1 = wheelGeo.clone(); w1.scale(scale, scale, scale); w1.translate(xOffset * scale, 0.35 * scale, zOffset * scale);
+        const w2 = wheelGeo.clone(); w2.scale(scale, scale, scale); w2.translate(xOffset * scale, 0.35 * scale, -zOffset * scale);
+        const w3 = wheelGeo.clone(); w3.scale(scale, scale, scale); w3.translate(-xOffset * scale, 0.35 * scale, zOffset * scale);
+        const w4 = wheelGeo.clone(); w4.scale(scale, scale, scale); w4.translate(-xOffset * scale, 0.35 * scale, -zOffset * scale);
         return BufferGeometryUtils.mergeGeometries([w1, w2, w3, w4]);
+    }
+
+    function addDetails(bodyGeo, length, width, height) {
+        // Bumpers
+        const bumperGeo = new THREE.BoxGeometry(0.5 * scale, 0.4 * scale, width * scale);
+        const frontBumper = bumperGeo.clone(); frontBumper.translate((length / 2 + 0.2) * scale, 0.5 * scale, 0);
+        const rearBumper = bumperGeo.clone(); rearBumper.translate(-(length / 2 + 0.2) * scale, 0.5 * scale, 0);
+
+        // Side Mirrors
+        const mirrorGeo = new THREE.BoxGeometry(0.3 * scale, 0.2 * scale, 0.4 * scale);
+        const leftMirror = mirrorGeo.clone(); leftMirror.translate(0.5 * scale, height * 0.6 * scale, (width / 2 + 0.1) * scale);
+        const rightMirror = mirrorGeo.clone(); rightMirror.translate(0.5 * scale, height * 0.6 * scale, -(width / 2 + 0.1) * scale);
+
+        return BufferGeometryUtils.mergeGeometries([bodyGeo, frontBumper, rearBumper, leftMirror, rightMirror]);
     }
 
     // Type 0: Sedan
     {
-        const body = new THREE.BoxGeometry(4, 1.0, 1.8); body.translate(0, 0.8, 0);
-        const cabin = new THREE.BoxGeometry(2.2, 0.7, 1.6); cabin.translate(-0.2, 1.65, 0);
+        const body = new THREE.BoxGeometry(4 * scale, 1.0 * scale, 1.8 * scale); body.translate(0, 0.8 * scale, 0);
+        const cabin = new THREE.BoxGeometry(2.2 * scale, 0.7 * scale, 1.6 * scale); cabin.translate(-0.2 * scale, 1.65 * scale, 0);
+        const mergedBody = BufferGeometryUtils.mergeGeometries([body, cabin]);
+
         geoms.sedan = {
-            body: BufferGeometryUtils.mergeGeometries([body, cabin]),
+            body: addDetails(mergedBody, 4, 1.8, 1.0),
             wheels: createWheels(1.3, 0.8),
-            windows: new THREE.BoxGeometry(2.25, 0.6, 1.65).translate(-0.2, 1.65, 0)
+            windows: new THREE.BoxGeometry(2.25 * scale, 0.6 * scale, 1.65 * scale).translate(-0.2 * scale, 1.65 * scale, 0)
         };
     }
 
     // Type 1: SUV
     {
-        const body = new THREE.BoxGeometry(4.2, 1.2, 1.9); body.translate(0, 0.9, 0);
-        const cabin = new THREE.BoxGeometry(2.8, 0.9, 1.8); cabin.translate(-0.3, 1.95, 0);
+        const body = new THREE.BoxGeometry(4.2 * scale, 1.2 * scale, 1.9 * scale); body.translate(0, 0.9 * scale, 0);
+        const cabin = new THREE.BoxGeometry(2.8 * scale, 0.9 * scale, 1.8 * scale); cabin.translate(-0.3 * scale, 1.95 * scale, 0);
+        const mergedBody = BufferGeometryUtils.mergeGeometries([body, cabin]);
+
         geoms.suv = {
-            body: BufferGeometryUtils.mergeGeometries([body, cabin]),
+            body: addDetails(mergedBody, 4.2, 1.9, 1.2),
             wheels: createWheels(1.4, 0.85),
-            windows: new THREE.BoxGeometry(2.85, 0.8, 1.85).translate(-0.3, 1.95, 0)
+            windows: new THREE.BoxGeometry(2.85 * scale, 0.8 * scale, 1.85 * scale).translate(-0.3 * scale, 1.95 * scale, 0)
         };
     }
 
     // Type 2: Sports
     {
-        const body = new THREE.BoxGeometry(3.8, 0.8, 1.7); body.translate(0, 0.7, 0);
-        const cabin = new THREE.BoxGeometry(1.5, 0.6, 1.5); cabin.translate(-0.2, 1.4, 0);
+        const body = new THREE.BoxGeometry(3.8 * scale, 0.8 * scale, 1.7 * scale); body.translate(0, 0.7 * scale, 0);
+        const cabin = new THREE.BoxGeometry(1.5 * scale, 0.6 * scale, 1.5 * scale); cabin.translate(-0.2 * scale, 1.4 * scale, 0);
+        const mergedBody = BufferGeometryUtils.mergeGeometries([body, cabin]);
+
         geoms.sports = {
-            body: BufferGeometryUtils.mergeGeometries([body, cabin]),
+            body: addDetails(mergedBody, 3.8, 1.7, 0.8),
             wheels: createWheels(1.2, 0.8),
-            windows: new THREE.BoxGeometry(1.55, 0.5, 1.55).translate(-0.2, 1.4, 0)
+            windows: new THREE.BoxGeometry(1.55 * scale, 0.5 * scale, 1.55 * scale).translate(-0.2 * scale, 1.4 * scale, 0)
         };
     }
 
     // Type 3: Truck
     {
-        const chassis = new THREE.BoxGeometry(4.5, 0.5, 1.8); chassis.translate(0, 0.6, 0);
-        const cab = new THREE.BoxGeometry(1.5, 1.5, 1.8); cab.translate(1.2, 1.6, 0);
-        const bed = new THREE.BoxGeometry(2.5, 0.8, 1.8); bed.translate(-0.9, 1.25, 0);
+        const chassis = new THREE.BoxGeometry(4.5 * scale, 0.5 * scale, 1.8 * scale); chassis.translate(0, 0.6 * scale, 0);
+        const cab = new THREE.BoxGeometry(1.5 * scale, 1.5 * scale, 1.8 * scale); cab.translate(1.2 * scale, 1.6 * scale, 0);
+        const bed = new THREE.BoxGeometry(2.5 * scale, 0.8 * scale, 1.8 * scale); bed.translate(-0.9 * scale, 1.25 * scale, 0);
+        const mergedBody = BufferGeometryUtils.mergeGeometries([chassis, cab, bed]);
+
         geoms.truck = {
-            body: BufferGeometryUtils.mergeGeometries([chassis, cab, bed]),
+            body: addDetails(mergedBody, 4.5, 1.8, 1.5),
             wheels: createWheels(1.5, 0.8),
-            windows: new THREE.BoxGeometry(1.55, 0.8, 1.85).translate(1.2, 1.8, 0)
+            windows: new THREE.BoxGeometry(1.55 * scale, 0.8 * scale, 1.85 * scale).translate(1.2 * scale, 1.8 * scale, 0)
         };
     }
 
     // Type 4: Van
     {
-        const body = new THREE.BoxGeometry(4.2, 1.8, 1.8); body.translate(0, 1.2, 0);
+        const body = new THREE.BoxGeometry(4.2 * scale, 1.8 * scale, 1.8 * scale); body.translate(0, 1.2 * scale, 0);
+
         geoms.van = {
-            body: body,
+            body: addDetails(body, 4.2, 1.8, 1.8),
             wheels: createWheels(1.4, 0.8),
-            windows: new THREE.BoxGeometry(1.5, 0.8, 1.85).translate(1.0, 1.8, 0) // Windshield area
+            windows: new THREE.BoxGeometry(1.5 * scale, 0.8 * scale, 1.85 * scale).translate(1.0 * scale, 1.8 * scale, 0)
         };
     }
 
     return geoms;
 }
 
-export function createTraffic(scene) {
-    const count = 400;
+export function createTraffic(scene, trafficConfig) {
+    state.trafficConfig = trafficConfig; // Store for update loop
+    const count = trafficConfig ? trafficConfig.count : 400;
     const geoms = buildCarGeometries();
     const carTypes = ['sedan', 'suv', 'sports', 'truck', 'van'];
 
@@ -138,10 +165,16 @@ export function createTraffic(scene) {
 
     // Initialize Data
     for (let i = 0; i < count; i++) {
-        const lane = i % 6;
-        const dir = lane < 3 ? 1 : -1;
-        const z = (lane - 2.5) * 10;
-        const x = (Math.random() - 0.5) * 3000;
+        let lane, dir, z, x;
+
+        if (trafficConfig) {
+            const laneIdx = i % trafficConfig.lanes.length;
+            const laneDef = trafficConfig.lanes[laneIdx];
+            lane = laneIdx;
+            dir = laneDef.dir;
+            z = laneDef.z;
+            x = (Math.random() - 0.5) * trafficConfig.length;
+        }
         const typeIndex = Math.floor(Math.random() * 5);
         const type = carTypes[typeIndex];
 
@@ -158,7 +191,7 @@ export function createTraffic(scene) {
         const safeDistance = (isReckless ? 2.0 : 4.0) + Math.random() * 2; // Reckless tailgating
 
         state.trafficData.push({
-            x, y: 69, z, dir,
+            x, y: trafficConfig ? trafficConfig.y : 69, z, dir,
             type, typeIndex: i,
             color: new THREE.Color().setHex(Math.random() * 0xffffff),
             velocity, acceleration, maxSpeed, length,
@@ -316,7 +349,8 @@ export function updateTraffic(dt) {
 
     const dummy = new THREE.Object3D();
     const dummyL = new THREE.Object3D();
-    const mapWidth = 3000;
+    const mapWidth = state.trafficConfig ? state.trafficConfig.length : 3000;
+    const halfWidth = mapWidth / 2;
 
     // Density Control
     // Only process the first N cars based on density
@@ -339,7 +373,10 @@ export function updateTraffic(dt) {
     }
 
     // Spatial Partitioning: Sort cars by lane and position
-    const lanes = [[], [], [], [], [], []];
+    // Spatial Partitioning: Sort cars by lane and position
+    // Determine max lanes from data or config
+    const maxLanes = 20; // Safe upper bound
+    const lanes = Array(maxLanes).fill().map(() => []);
     activeCars.forEach(car => lanes[car.lane].push(car));
 
     // Sort each lane
@@ -352,18 +389,21 @@ export function updateTraffic(dt) {
 
     // Physics Loop
     lanes.forEach((laneCars, laneIndex) => {
-        const dir = laneIndex < 3 ? 1 : -1;
+        if (laneCars.length === 0) return;
+        const dir = laneCars[0].dir; // Assume all cars in lane have same dir
 
         laneCars.forEach((car, i) => {
             // [CHANGE] Check for Ground Logic
             if (!car.isFalling && !car.isExploding) {
-                const key = getVoxelKey(car.x, car.z);
-                // Check if ground exists at this location.
-                // We check if the key exists in the map.
-                if (!bridgeVoxelMap.has(key)) {
-                    car.isFalling = true;
-                    car.crashed = true; // Mark as crashed visually (red, etc)
-                    car.velocity *= 0.8; // Maintain some forward momentum but slow down
+                // Only check ground if enabled in config
+                if (state.trafficConfig && state.trafficConfig.groundCheck) {
+                    const key = getVoxelKey(car.x, car.z);
+                    // Check if ground exists at this location.
+                    if (!bridgeVoxelMap.has(key)) {
+                        car.isFalling = true;
+                        car.crashed = true; // Mark as crashed visually (red, etc)
+                        car.velocity *= 0.8; // Maintain some forward momentum but slow down
+                    }
                 }
             }
 
@@ -377,15 +417,15 @@ export function updateTraffic(dt) {
                 car.vr.x += dt;
 
                 if (car.y < -20) {
-                     // Splash or Reset
-                     car.isFalling = false;
-                     car.crashed = false;
-                     car.y = 69;
-                     car.velocity = 0;
-                     car.acceleration = 0;
-                     car.crashTimer = 0;
-                     // Random respawn x
-                     car.x = (Math.random() - 0.5) * 3000;
+                    // Splash or Reset
+                    car.isFalling = false;
+                    car.crashed = false;
+                    car.y = state.trafficConfig ? state.trafficConfig.y : 69;
+                    car.velocity = 0;
+                    car.acceleration = 0;
+                    car.crashTimer = 0;
+                    // Random respawn x
+                    car.x = (Math.random() - 0.5) * 3000;
                 }
                 // Skip other physics
             }
@@ -398,7 +438,7 @@ export function updateTraffic(dt) {
                     // Reset / Respawn
                     car.isExploding = false;
                     car.crashed = false;
-                    car.y = 69;
+                    car.y = state.trafficConfig ? state.trafficConfig.y : 69;
                     car.velocity = 0;
                     car.acceleration = 0;
                     car.crashTimer = 0;
@@ -453,7 +493,8 @@ export function updateTraffic(dt) {
                     }
 
                     // Dynamic Safe Distance (Time Headway)
-                    const timeHeadway = 1.5; // seconds
+                    // [CHANGE] Scale headway inversely with speed multiplier to allow faster flow
+                    const timeHeadway = 1.5 / Math.max(1, speedMult * 0.8);
                     const minGap = 4.0; // meters
                     const desiredGap = minGap + car.velocity * timeHeadway;
 
@@ -536,8 +577,8 @@ export function updateTraffic(dt) {
                     car.x += car.velocity * dir * dt;
 
                     // Wrap Position
-                    if (car.x > 1500) car.x -= 3000;
-                    if (car.x < -1500) car.x += 3000;
+                    if (car.x > halfWidth) car.x -= mapWidth;
+                    if (car.x < -halfWidth) car.x += mapWidth;
                 }
             }
 
@@ -764,4 +805,80 @@ export function updateParticles(dt) {
     if (needsUpload) {
         state.particleMesh.instanceMatrix.needsUpdate = true;
     }
+}
+
+export function createPedestrians(scene, config) {
+    if (!config) return;
+
+    const count = config.count || 50;
+    const geometry = new THREE.BoxGeometry(1, 2, 1);
+    geometry.translate(0, 1, 0); // Pivot at feet
+    const material = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+
+    state.pedestrianMesh = new THREE.InstancedMesh(geometry, material, count);
+    state.pedestrianMesh.castShadow = true;
+    state.pedestrianMesh.receiveShadow = true;
+    scene.add(state.pedestrianMesh);
+
+    state.pedestrians = [];
+
+    for (let i = 0; i < count; i++) {
+        // Pick a random sidewalk area
+        const area = config.areas[Math.floor(Math.random() * config.areas.length)];
+        const x = area.x + (Math.random() - 0.5) * area.width;
+        const z = area.z + (Math.random() - 0.5) * area.length;
+
+        state.pedestrians.push({
+            x, y: area.y, z,
+            speed: 2 + Math.random() * 2,
+            dir: Math.random() > 0.5 ? 1 : -1,
+            area: area,
+            color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5)
+        });
+
+        state.pedestrianMesh.setColorAt(i, state.pedestrians[i].color);
+    }
+}
+
+export function updatePedestrians(dt) {
+    if (!state.pedestrianMesh) return;
+
+    const dummy = new THREE.Object3D();
+
+    state.pedestrians.forEach((p, i) => {
+        if (p.area.axis === 'x') {
+            p.x += p.speed * p.dir * dt;
+            // Bounds check X
+            const halfLen = p.area.width / 2; // Use width as length for X-axis
+            if (p.x > p.area.x + halfLen) {
+                p.x = p.area.x + halfLen;
+                p.dir *= -1;
+            } else if (p.x < p.area.x - halfLen) {
+                p.x = p.area.x - halfLen;
+                p.dir *= -1;
+            }
+        } else {
+            // Default Z axis
+            p.z += p.speed * p.dir * dt;
+            // Bounds check Z
+            const halfLen = p.area.length / 2;
+            if (p.z > p.area.z + halfLen) {
+                p.z = p.area.z + halfLen;
+                p.dir *= -1;
+            } else if (p.z < p.area.z - halfLen) {
+                p.z = p.area.z - halfLen;
+                p.dir *= -1;
+            }
+        }
+
+        dummy.position.set(p.x, p.y, p.z);
+        // Bobbing
+        dummy.position.y += Math.abs(Math.sin(Date.now() * 0.01 * p.speed + i)) * 0.2;
+
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        state.pedestrianMesh.setMatrixAt(i, dummy.matrix);
+    });
+
+    state.pedestrianMesh.instanceMatrix.needsUpdate = true;
 }

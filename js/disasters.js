@@ -21,6 +21,7 @@ function createVolcano(scene) {
     const volcano = new THREE.Mesh(geo, mat);
     // Initial position: Hidden deep underwater
     volcano.position.set(400, -800, -600);
+    volcano.visible = false; // [FIX] Hide by default
     scene.add(volcano);
 
     // Lava/Crater cap (glowing circle at the top)
@@ -43,9 +44,9 @@ function createVolcano(scene) {
 
     // Initialize all particles to scale 0 (hidden)
     const dummy = new THREE.Object3D();
-    dummy.scale.set(0,0,0);
+    dummy.scale.set(0, 0, 0);
     dummy.updateMatrix();
-    for(let i=0; i<1000; i++) {
+    for (let i = 0; i < 1000; i++) {
         state.disasters.volcano.particleMesh.setMatrixAt(i, dummy.matrix);
         state.disasters.volcano.particles.push({
             active: false,
@@ -60,10 +61,11 @@ function createVolcano(scene) {
 
 export function triggerVolcano() {
     const vol = state.disasters.volcano;
-    if(vol.active) return; // Prevent double trigger
+    if (vol.active) return; // Prevent double trigger
 
     vol.active = true;
     vol.erupting = false;
+    vol.mesh.visible = true; // [FIX] Show when triggered
 
     // Reset position deep underwater
     vol.mesh.position.y = -650;
@@ -99,7 +101,7 @@ export function checkLavaCollision(pos) {
     // Optimization: Check if within general radius first
     const dx = pos.x - vol.mesh.position.x;
     const dz = pos.z - vol.mesh.position.z;
-    if (dx*dx + dz*dz > (vol.radius + 150)**2) return false; // Extended radius for flying lava
+    if (dx * dx + dz * dz > (vol.radius + 150) ** 2) return false; // Extended radius for flying lava
 
     const particles = vol.particles;
     const hitRadiusSq = 15 * 15; // Hit radius
@@ -112,11 +114,11 @@ export function checkLavaCollision(pos) {
             const pdy = pos.y - p.pos.y; // Height matters for falling lava
             const pdz = pos.z - p.pos.z;
 
-            if (pdx*pdx + pdy*pdy + pdz*pdz < hitRadiusSq) {
+            if (pdx * pdx + pdy * pdy + pdz * pdz < hitRadiusSq) {
                 p.active = false; // Destroy the rock
                 // Update the mesh to hide it immediately
                 const dummy = new THREE.Object3D();
-                dummy.scale.set(0,0,0);
+                dummy.scale.set(0, 0, 0);
                 vol.particleMesh.setMatrixAt(i, dummy.matrix);
                 vol.particleMesh.instanceMatrix.needsUpdate = true;
                 return true;
@@ -161,9 +163,9 @@ function spawnLava(dt, vol) {
     const craterPos = new THREE.Vector3(0, 280, 0); // Adjusted for new height
     craterPos.applyMatrix4(vol.mesh.matrixWorld);
 
-    for(let i=0; i<particles.length; i++) {
-        if(spawned >= count) break;
-        if(!particles[i].active) {
+    for (let i = 0; i < particles.length; i++) {
+        if (spawned >= count) break;
+        if (!particles[i].active) {
             const p = particles[i];
             p.active = true;
             p.pos.copy(craterPos);
@@ -195,7 +197,7 @@ function updateLavaParticles(dt, vol) {
             p.life -= dt;
             if (p.life <= 0) {
                 p.active = false;
-                dummy.scale.set(0,0,0);
+                dummy.scale.set(0, 0, 0);
                 needsUpdate = true;
             } else {
                 p.vel.y -= 90.8 * dt; // Heavy gravity
@@ -204,16 +206,16 @@ function updateLavaParticles(dt, vol) {
                 // Collision with water level
                 if (p.pos.y < -10) {
                     p.active = false;
-                    dummy.scale.set(0,0,0);
+                    dummy.scale.set(0, 0, 0);
                 } else {
                     dummy.position.copy(p.pos);
-                    dummy.scale.set(1,1,1);
+                    dummy.scale.set(1, 1, 1);
                     activeCount++;
                 }
                 needsUpdate = true;
             }
         } else {
-            dummy.scale.set(0,0,0);
+            dummy.scale.set(0, 0, 0);
         }
 
         dummy.updateMatrix();
@@ -257,9 +259,9 @@ function createMeteorVisuals(scene) {
     state.disasters.meteors.mesh = mesh;
 
     const dummy = new THREE.Object3D();
-    dummy.scale.set(0,0,0);
+    dummy.scale.set(0, 0, 0);
     dummy.updateMatrix();
-    for(let i=0; i<100; i++) {
+    for (let i = 0; i < 100; i++) {
         mesh.setMatrixAt(i, dummy.matrix);
         state.disasters.meteors.particles.push({
             active: false,
@@ -283,8 +285,8 @@ function updateMeteors(dt, scene) {
 
     // Spawn new meteors randomly
     if (Math.random() < 0.1) { // Spawn rate
-        for(let i=0; i<met.particles.length; i++) {
-            if(!met.particles[i].active) {
+        for (let i = 0; i < met.particles.length; i++) {
+            if (!met.particles[i].active) {
                 const p = met.particles[i];
                 p.active = true;
 
@@ -295,7 +297,7 @@ function updateMeteors(dt, scene) {
                 p.target.set(tx, 67, tz); // Deck height
 
                 // Spawn high up
-                p.pos.set(tx + (Math.random()-0.5)*500, 800 + Math.random()*200, tz + (Math.random()-0.5)*500);
+                p.pos.set(tx + (Math.random() - 0.5) * 500, 800 + Math.random() * 200, tz + (Math.random() - 0.5) * 500);
 
                 // Velocity towards target
                 p.vel.subVectors(p.target, p.pos).normalize().multiplyScalar(400); // Fast speed
@@ -321,7 +323,7 @@ function updateMeteors(dt, scene) {
             if (p.pos.y <= p.target.y && lastPos.y > p.target.y) {
                 // Impact!
                 p.active = false;
-                dummy.scale.set(0,0,0);
+                dummy.scale.set(0, 0, 0);
                 needsUpdate = true;
 
                 // [CHANGE] Destruction Loop (Area Damage)
@@ -330,7 +332,7 @@ function updateMeteors(dt, scene) {
                 for (let dx = -radius; dx <= radius; dx += step) {
                     for (let dz = -radius; dz <= radius; dz += step) {
                         // Check circular distance
-                        if (dx*dx + dz*dz <= radius*radius) {
+                        if (dx * dx + dz * dz <= radius * radius) {
                             removeVoxelAt(p.target.x + dx, p.target.z + dz);
                         }
                     }
@@ -355,7 +357,7 @@ function updateMeteors(dt, scene) {
                 needsUpdate = true;
             }
         } else {
-            dummy.scale.set(0,0,0);
+            dummy.scale.set(0, 0, 0);
             dummy.updateMatrix();
             mesh.setMatrixAt(i, dummy.matrix);
         }

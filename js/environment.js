@@ -41,7 +41,7 @@ export function createVolumetricFog(scene) {
         time: { value: 0 },
         color: { value: new THREE.Color(0xffffff) },
         map: { value: createFogTexture() },
-        opacity: { value: 0.5 }
+        opacity: { value: (config.fogDensity / 100) * 0.02 }
     };
 
     const material = new THREE.ShaderMaterial({
@@ -358,7 +358,13 @@ export function updateFog(scene) {
     }
 
     // Also update standard fog for distance
-    scene.fog.density = density * 0.004; // Increased base smooth fog
+    const fogDensity = density * 0.004; // Increased base smooth fog
+    scene.fog.density = fogDensity;
+
+    // Update Water Fog
+    if (state.water) {
+        state.water.material.uniforms.fogDensity.value = fogDensity;
+    }
 }
 
 export function createPrecipitation(scene) {

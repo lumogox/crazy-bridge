@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
 import { createScene, setupLighting, setupPostProcessing, onWindowResize, updateTimeOfDay } from './scene.js';
 import { createVolumetricFog, createWater, createTerrain, createCity, createClouds, updateFog, createPrecipitation, updatePrecipitation, updateTerrain } from './environment.js';
-import { createBridge } from './bridge.js';
 import { createTraffic, updateTraffic, createShips, updateShips, createBirds, updateBirds, createStreetLights, createParticles, updateParticles } from './dynamic.js';
 import { setupUI } from './ui.js';
 import { state, config } from './appState.js';
+import { ScenarioManager } from './scenarios/ScenarioManager.js';
 // [CHANGE] Import the disaster module
 import { initDisasters, updateDisasters } from './disasters.js';
 
 let scene, camera, renderer, composer, controls, stats;
+let scenarioManager;
 const clock = new THREE.Clock();
 
 init();
@@ -31,20 +32,24 @@ function init() {
     setupLighting(scene);
 
     // Environment
-    createVolumetricFog(scene);
-    createWater(scene);
-    createBridge(scene);
-    createTerrain(scene);
-    createCity(scene);
+    // createVolumetricFog(scene); // Moved to GoldenBridgeScenario
+    // createWater(scene);
+    // createTerrain(scene);
+
+    // Scenario Setup
+    scenarioManager = new ScenarioManager(scene);
+    scenarioManager.loadRandomScenario();
+
+    // createCity(scene); // City might be part of scenario or background? Leaving for now.
+    // createCity(scene); // Moved to GoldenBridgeScenario
 
     // Dynamic Elements
-    createStreetLights(scene);
-    createClouds(scene);
-    createPrecipitation(scene);
-    createTraffic(scene);
-    createShips(scene);
-    createBirds(scene);
-    createParticles(scene);
+    // createStreetLights(scene); // Moved
+    // createClouds(scene); // Moved
+    createPrecipitation(scene); // Keep precipitation global? Or move? It's weather.
+    // createShips(scene); // Moved
+    // createBirds(scene); // Moved
+    createParticles(scene); // Keep particles (explosions)
 
     // [CHANGE] Initialize Disasters
     initDisasters(scene);
@@ -60,6 +65,7 @@ function init() {
 
     // Initial update
     updateTimeOfDay(scene);
+    updateFog(scene);
 }
 
 function animate() {
@@ -81,7 +87,10 @@ function animate() {
     updateBirds(dt);
     updateParticles(dt);
     updatePrecipitation(dt);
+    updatePrecipitation(dt);
     updateTerrain();
+
+    if (scenarioManager) scenarioManager.update(dt);
 
     // [CHANGE] Update Disasters
     updateDisasters(dt, scene);
