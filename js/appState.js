@@ -46,5 +46,15 @@ export const state = {
     cloudMesh: null,
     clouds: [],
     precipitationSystem: null,
-    precipitationData: []
+    precipitationData: [],
+    // New Disaster State
+    disasters: {
+        volcano: {
+            active: false,
+            erupting: false,
+            mesh: null,
+            particles: [],
+            height: 0
+        }
+    }
 };

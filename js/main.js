@@ -6,6 +6,8 @@ import { createBridge } from './bridge.js';
 import { createTraffic, updateTraffic, createShips, updateShips, createBirds, updateBirds, createStreetLights, createParticles, updateParticles } from './dynamic.js';
 import { setupUI } from './ui.js';
 import { state, config } from './appState.js';
+// [CHANGE] Import the disaster module
+import { initDisasters, updateDisasters } from './disasters.js';
 
 let scene, camera, renderer, composer, controls, stats;
 const clock = new THREE.Clock();
@@ -44,6 +46,9 @@ function init() {
     createBirds(scene);
     createParticles(scene);
 
+    // [CHANGE] Initialize Disasters
+    initDisasters(scene);
+
     // Post-Processing
     composer = setupPostProcessing(scene, camera, renderer);
 
@@ -77,6 +82,10 @@ function animate() {
     updateParticles(dt);
     updatePrecipitation(dt);
     updateTerrain();
+
+    // [CHANGE] Update Disasters
+    updateDisasters(dt, scene);
+
     stats.update();
     composer.render();
 }
