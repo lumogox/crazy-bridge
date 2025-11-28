@@ -55,6 +55,10 @@ export const state = {
             mesh: null,
             particles: [],
             height: 0
+        },
+        meteors: {
+            active: false,
+            particles: []
         }
     }
 };

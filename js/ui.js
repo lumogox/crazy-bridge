@@ -81,6 +81,7 @@ export function setupUI(scene, camera) {
             <label style="color: #ff4444; margin-bottom: 10px;">Disasters</label>
             <div style="display: flex; gap: 10px;">
                 <button id="btnVolcano" style="flex: 1; padding: 8px; background: #552222; color: white; border: 1px solid #ff4444; border-radius: 4px; cursor: pointer; font-weight: bold;">🌋 Erupt</button>
+                <button id="btnMeteor" style="flex: 1; padding: 8px; background: #222255; color: white; border: 1px solid #4444ff; border-radius: 4px; cursor: pointer; font-weight: bold;">☄️ Meteors</button>
             </div>
         `;
         container.appendChild(disasterDiv);
@@ -88,6 +89,9 @@ export function setupUI(scene, camera) {
         // Add Listener
         document.getElementById('btnVolcano').addEventListener('click', () => {
             triggerVolcano();
+        });
+        document.getElementById('btnMeteor').addEventListener('click', () => {
+            import('./disasters.js').then(module => module.triggerMeteorShower());
         });
     }
 
