@@ -8,6 +8,21 @@ import { bridgeVoxelMap, getVoxelKey } from './bridge.js';
 
 // --- Traffic System ---
 
+// Helper: Find a valid spawning position on the bridge
+function findValidSpawnPosition(z) {
+    // Attempt to find a valid X position where ground exists
+    for (let i = 0; i < 20; i++) {
+        const x = (Math.random() - 0.5) * 3000;
+        const key = getVoxelKey(x, z);
+        if (bridgeVoxelMap.has(key)) {
+            return x;
+        }
+    }
+    // If we can't find one after 20 tries (unlikely unless bridge is gone),
+    // return null or fallback to a safe zone (or just let it fall)
+    return null;
+}
+
 function buildCarGeometries() {
     const geoms = {};
     const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
@@ -323,9 +338,24 @@ export function updateTraffic(dt) {
     const activeCount = Math.floor(state.trafficData.length * config.trafficDensity);
     const activeCars = state.trafficData.slice(0, activeCount);
 
-    // Hide inactive cars
+    // Hide inactive cars AND ensure they are parked on valid ground for when they become active
     for (let i = activeCount; i < state.trafficData.length; i++) {
         const car = state.trafficData[i];
+
+        // [CHANGE] Ensure inactive cars are on valid ground
+        // This prevents them from "popping in" over a hole when density is increased
+        const key = getVoxelKey(car.x, car.z);
+        if (!bridgeVoxelMap.has(key)) {
+             const newX = findValidSpawnPosition(car.z);
+             if (newX !== null) {
+                 car.x = newX;
+                 car.y = 69; // Reset height
+                 car.isFalling = false;
+                 car.crashed = false;
+                 car.velocity = 0;
+             }
+        }
+
         const meshes = state.carMeshes[car.type];
         dummy.scale.set(0, 0, 0);
         dummy.updateMatrix();
@@ -384,8 +414,15 @@ export function updateTraffic(dt) {
                      car.velocity = 0;
                      car.acceleration = 0;
                      car.crashTimer = 0;
-                     // Random respawn x
-                     car.x = (Math.random() - 0.5) * 3000;
+
+                     // [CHANGE] Respawn at valid location
+                     const newX = findValidSpawnPosition(car.z);
+                     if (newX !== null) {
+                        car.x = newX;
+                     } else {
+                        // If no valid spot found (apocalypse?), spawn anywhere and fall again
+                        car.x = (Math.random() - 0.5) * 3000;
+                     }
                 }
                 // Skip other physics
             }
