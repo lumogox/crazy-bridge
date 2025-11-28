@@ -684,24 +684,25 @@ export function createParticles(scene) {
     state.callbacks.spawnExplosion = spawnExplosion;
 }
 
-export function spawnExplosion(x, y, z) {
+export function spawnExplosion(x, y, z, scale = 1.0) {
     const maxParticles = 2000;
+    const count = Math.floor(50 * scale);
     let spawned = 0;
     for (let i = 0; i < maxParticles; i++) {
-        if (spawned >= 50) break;
+        if (spawned >= count) break;
         if (!state.particleData[i].active) {
             const p = state.particleData[i];
             p.active = true;
-            p.x = x + (Math.random() - 0.5) * 5;
-            p.y = y + (Math.random() - 0.5) * 5;
-            p.z = z + (Math.random() - 0.5) * 5;
+            p.x = x + (Math.random() - 0.5) * 5 * scale;
+            p.y = y + (Math.random() - 0.5) * 5 * scale;
+            p.z = z + (Math.random() - 0.5) * 5 * scale;
 
             // Explosion velocity
-            p.vx = (Math.random() - 0.5) * 30;
-            p.vy = (Math.random() - 0.5) * 30 + 10; // Upward bias
-            p.vz = (Math.random() - 0.5) * 30;
+            p.vx = (Math.random() - 0.5) * 30 * scale;
+            p.vy = ((Math.random() - 0.5) * 30 + 10) * scale; // Upward bias
+            p.vz = (Math.random() - 0.5) * 30 * scale;
 
-            p.life = 1.0 + Math.random();
+            p.life = (1.0 + Math.random()) * Math.sqrt(scale); // Lasts longer if bigger
             p.maxLife = p.life;
 
             // Fire colors (Red/Orange/Yellow)
@@ -710,7 +711,7 @@ export function spawnExplosion(x, y, z) {
             } else {
                 // Smoke (Grey)
                 p.color.setHSL(0, 0, 0.2 + Math.random() * 0.2);
-                p.vy += 10; // Smoke rises faster
+                p.vy += 10 * scale; // Smoke rises faster
                 p.life += 1.0; // Smoke lasts longer
             }
 

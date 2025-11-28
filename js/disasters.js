@@ -238,9 +238,16 @@ function createMeteorVisuals(scene) {
     if (state.disasters.meteors.mesh) return;
 
     // Meteors
-    const geo = new THREE.SphereGeometry(2, 8, 8);
-    // Glowing hot material
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffdd88 });
+    // [CHANGE] Use IcosahedronGeometry for rocky look, scale 6 (radius)
+    const geo = new THREE.IcosahedronGeometry(6, 0);
+    // [CHANGE] Dark rock with glowing veins (emissive)
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a,
+        roughness: 0.9,
+        emissive: 0xff4400,
+        emissiveIntensity: 3.0,
+        flatShading: true
+    });
 
     // We can use an InstancedMesh if we have many, or just regular meshes if few.
     // Let's use InstancedMesh for performance if we want a "shower".
@@ -258,7 +265,8 @@ function createMeteorVisuals(scene) {
             active: false,
             pos: new THREE.Vector3(),
             vel: new THREE.Vector3(),
-            target: new THREE.Vector3()
+            target: new THREE.Vector3(),
+            scale: 1.0 // [CHANGE] Store random scale
         });
     }
 }
@@ -292,6 +300,9 @@ function updateMeteors(dt, scene) {
                 // Velocity towards target
                 p.vel.subVectors(p.target, p.pos).normalize().multiplyScalar(400); // Fast speed
 
+                // [CHANGE] Randomize scale
+                p.scale = 2.0 + Math.random() * 2.0;
+
                 break; // Spawn one at a time
             }
         }
@@ -302,6 +313,10 @@ function updateMeteors(dt, scene) {
             const lastPos = p.pos.clone();
             p.pos.addScaledVector(p.vel, dt);
 
+            // Rotation
+            dummy.rotation.x += dt * 2;
+            dummy.rotation.y += dt * 3;
+
             // Check if passed target Y (impact)
             if (p.pos.y <= p.target.y && lastPos.y > p.target.y) {
                 // Impact!
@@ -309,17 +324,32 @@ function updateMeteors(dt, scene) {
                 dummy.scale.set(0,0,0);
                 needsUpdate = true;
 
-                // Destruction
-                const destroyed = removeVoxelAt(p.target.x, p.target.z);
+                // [CHANGE] Destruction Loop (Area Damage)
+                const radius = 35; // Big hole
+                const step = 10; // Grid size
+                for (let dx = -radius; dx <= radius; dx += step) {
+                    for (let dz = -radius; dz <= radius; dz += step) {
+                        // Check circular distance
+                        if (dx*dx + dz*dz <= radius*radius) {
+                            removeVoxelAt(p.target.x + dx, p.target.z + dz);
+                        }
+                    }
+                }
 
-                // Visual Explosion
+                // [CHANGE] Visual Explosion - Massive
                 if (state.callbacks && state.callbacks.spawnExplosion) {
-                    state.callbacks.spawnExplosion(p.target.x, p.target.y, p.target.z);
+                    // Main blast
+                    state.callbacks.spawnExplosion(p.target.x, p.target.y, p.target.z, 3.0);
+                    // Secondary blasts for volume
+                    state.callbacks.spawnExplosion(p.target.x + 10, p.target.y, p.target.z + 10, 2.0);
+                    state.callbacks.spawnExplosion(p.target.x - 10, p.target.y, p.target.z - 10, 2.0);
                 }
 
             } else {
                 dummy.position.copy(p.pos);
-                dummy.scale.set(1 + Math.random(), 1 + Math.random(), 1 + Math.random()); // Flicker size
+                // [CHANGE] Use p.scale
+                const s = p.scale;
+                dummy.scale.set(s, s, s);
                 dummy.updateMatrix();
                 mesh.setMatrixAt(i, dummy.matrix);
                 needsUpdate = true;
