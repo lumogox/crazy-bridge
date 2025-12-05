@@ -11,12 +11,11 @@ import { bridgeVoxelMap, getVoxelKey } from './bridge.js';
 function buildCarGeometries() {
     const geoms = {};
     const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
-    wheelGeo.rotateZ(Math.PI / 2);
+    wheelGeo.rotateX(Math.PI / 2); // Rotate so wheel faces sideways (correct orientation)
 
     const scale = 1.5;
 
     function createWheels(xOffset, zOffset) {
-        // Scale first, then translate
         const w1 = wheelGeo.clone(); w1.scale(scale, scale, scale); w1.translate(xOffset * scale, 0.35 * scale, zOffset * scale);
         const w2 = wheelGeo.clone(); w2.scale(scale, scale, scale); w2.translate(xOffset * scale, 0.35 * scale, -zOffset * scale);
         const w3 = wheelGeo.clone(); w3.scale(scale, scale, scale); w3.translate(-xOffset * scale, 0.35 * scale, zOffset * scale);
@@ -756,26 +755,31 @@ export function updateTraffic(dt) {
             meshes.windows.setMatrixAt(car.typeIndex, dummy.matrix);
             meshes.wheels.setMatrixAt(car.typeIndex, dummy.matrix);
 
-            // Headlights/Taillights
-            // Left
-            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z + 0.8);
+            // Headlights/Taillights - use dummy position which includes wobble offset
+            const lightY = dummy.position.y + 1.0; // Offset above ground for lights
+            const lightXOffset = 3.0; // Front/rear offset from car center
+            const lightZOffset = 0.6; // Left/right offset from car center
+
+            // Headlights (front of car)
+            // Left headlight
+            dummyL.position.set(dummy.position.x + lightXOffset * car.dir, lightY, dummy.position.z + lightZOffset);
             dummyL.scale.set(scale, scale, scale);
             dummyL.updateMatrix();
             state.headlightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
-            // Right
-            dummyL.position.set(car.x + 2 * car.dir, car.y, car.z - 0.8);
+            // Right headlight
+            dummyL.position.set(dummy.position.x + lightXOffset * car.dir, lightY, dummy.position.z - lightZOffset);
             dummyL.scale.set(scale, scale, scale);
             dummyL.updateMatrix();
             state.headlightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
 
-            // Taillights
-            // Left
-            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z + 0.8);
+            // Taillights (rear of car)
+            // Left taillight
+            dummyL.position.set(dummy.position.x - lightXOffset * car.dir, lightY, dummy.position.z + lightZOffset);
             dummyL.scale.set(scale, scale, scale);
             dummyL.updateMatrix();
             state.taillightMesh.setMatrixAt(car.typeIndex * 2, dummyL.matrix);
-            // Right
-            dummyL.position.set(car.x - 2 * car.dir, car.y, car.z - 0.8);
+            // Right taillight
+            dummyL.position.set(dummy.position.x - lightXOffset * car.dir, lightY, dummy.position.z - lightZOffset);
             dummyL.scale.set(scale, scale, scale);
             dummyL.updateMatrix();
             state.taillightMesh.setMatrixAt(car.typeIndex * 2 + 1, dummyL.matrix);
