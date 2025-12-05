@@ -82,6 +82,7 @@ export function setupUI(scene, camera) {
             <div style="display: flex; gap: 10px;">
                 <button id="btnVolcano" style="flex: 1; padding: 8px; background: #552222; color: white; border: 1px solid #ff4444; border-radius: 4px; cursor: pointer; font-weight: bold;">🌋 Erupt</button>
                 <button id="btnMeteor" style="flex: 1; padding: 8px; background: #222255; color: white; border: 1px solid #4444ff; border-radius: 4px; cursor: pointer; font-weight: bold;">☄️ Meteors</button>
+                <button id="btnTornado" style="flex: 1; padding: 8px; background: #555555; color: white; border: 1px solid #aaaaaa; border-radius: 4px; cursor: pointer; font-weight: bold;">🌪️ Tornado</button>
             </div>
         `;
         container.appendChild(disasterDiv);
@@ -92,6 +93,9 @@ export function setupUI(scene, camera) {
         });
         document.getElementById('btnMeteor').addEventListener('click', () => {
             import('./disasters.js').then(module => module.triggerMeteorShower());
+        });
+        document.getElementById('btnTornado').addEventListener('click', () => {
+            import('./disasters.js').then(module => module.triggerTornado());
         });
     }
 

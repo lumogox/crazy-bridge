@@ -200,12 +200,14 @@ export function createTraffic(scene, trafficConfig) {
             crashTimer: 0,
             distractionTimer: 0,
             isExploding: false,
-            vy: 0,
+            vx: 0, vy: 0, vz: 0, // [CHANGE] Full 3D velocity
             vr: new THREE.Vector3(),
             lane: lane,
             recklessness: recklessness,
             originalColor: state.trafficData[i] ? state.trafficData[i].color : new THREE.Color().setHex(Math.random() * 0xffffff),
-            isFalling: false // [CHANGE] New state for falling through bridge
+            isFalling: false, // [CHANGE] New state for falling through bridge
+            isCaughtInTornado: false, // [CHANGE] Tornado state
+            tornadoAngle: 0
         });
 
         // Set color
@@ -393,8 +395,61 @@ export function updateTraffic(dt) {
         const dir = laneCars[0].dir; // Assume all cars in lane have same dir
 
         laneCars.forEach((car, i) => {
+            // Tornado Interaction
+            if (state.disasters.tornado.active) {
+                const torn = state.disasters.tornado;
+                if (!car.isCaughtInTornado && !car.isFalling && !car.isExploding) {
+                    const dx = car.x - torn.position.x;
+                    const dz = car.z - torn.position.z;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+
+                    if (dist < torn.radius) {
+                        // Chance to get caught
+                        if (Math.random() < 0.05) { // 5% chance per frame (high if checked every frame)
+                            car.isCaughtInTornado = true;
+                            car.crashed = true;
+                            car.tornadoAngle = Math.atan2(dz, dx);
+                        }
+                    }
+                }
+            } else if (car.isCaughtInTornado) {
+                // Tornado ended but car was caught -> release
+                car.isCaughtInTornado = false;
+                car.isFalling = true;
+                // Fling
+                car.vx = (Math.random() - 0.5) * 100;
+                car.vz = (Math.random() - 0.5) * 100;
+                car.vy = 20;
+            }
+
+            if (car.isCaughtInTornado) {
+                const torn = state.disasters.tornado;
+                // Spiral up
+                car.y += 30 * dt;
+                car.tornadoAngle += 5 * dt;
+                const r = Math.min(torn.radius * 0.8, 10 + car.y * 0.1);
+
+                car.x = torn.position.x + Math.cos(car.tornadoAngle) * r;
+                car.z = torn.position.z + Math.sin(car.tornadoAngle) * r;
+
+                car.vr.x += dt * 5;
+                car.vr.z += dt * 5;
+
+                // Throw if too high
+                if (car.y > 200 + Math.random() * 100) {
+                    car.isCaughtInTornado = false;
+                    car.isFalling = true;
+                    // Fling velocity
+                    const angle = car.tornadoAngle + Math.PI / 2; // Tangential
+                    const force = 150;
+                    car.vx = Math.cos(angle) * force;
+                    car.vz = Math.sin(angle) * force;
+                    car.vy = 50; // Up
+                }
+            }
+
             // [CHANGE] Check for Ground Logic
-            if (!car.isFalling && !car.isExploding) {
+            else if (!car.isFalling && !car.isExploding) {
                 // Only check ground if enabled in config
                 if (state.trafficConfig && state.trafficConfig.groundCheck) {
                     const key = getVoxelKey(car.x, car.z);
@@ -403,29 +458,54 @@ export function updateTraffic(dt) {
                         car.isFalling = true;
                         car.crashed = true; // Mark as crashed visually (red, etc)
                         car.velocity *= 0.8; // Maintain some forward momentum but slow down
+                        // [CHANGE] Init freefall velocity from movement
+                        car.vx = car.velocity * dir;
+                        car.vz = 0;
                     }
                 }
             }
 
-            // Falling Logic
+            // Falling Logic (Generalized for free physics)
             if (car.isFalling) {
-                car.y -= 20 * dt + (car.vy || 0);
-                car.vy = (car.vy || 0) + 9.8 * dt; // Gravity
-                car.x += car.velocity * dir * dt;
+                car.y += (car.vy || 0) * dt;
+                car.vy = (car.vy || 0) - 90.8 * dt; // Gravity (strong)
+
+                // Use explicit velocities if present, else fallback to lane logic
+                if (car.vx !== 0 || car.vz !== 0) {
+                    car.x += car.vx * dt;
+                    car.z += car.vz * dt;
+                } else {
+                    car.x += car.velocity * dir * dt;
+                }
 
                 // Tilt while falling
                 car.vr.x += dt;
 
-                if (car.y < -20) {
-                    // Splash or Reset
-                    car.isFalling = false;
-                    car.crashed = false;
-                    car.y = state.trafficConfig ? state.trafficConfig.y : 69;
-                    car.velocity = 0;
-                    car.acceleration = 0;
-                    car.crashTimer = 0;
-                    // Random respawn x
-                    car.x = (Math.random() - 0.5) * 3000;
+                // Impact
+                if (car.y < 60) { // Bridge height is ~67
+                     // Check if it hit the bridge deck (approx check) or water
+                     if (car.y < -20) {
+                        // Water Splash / Reset
+                        car.isFalling = false;
+                        car.crashed = false;
+                        car.isCaughtInTornado = false;
+                        car.vx = 0; car.vz = 0; car.vy = 0;
+                        car.y = state.trafficConfig ? state.trafficConfig.y : 69;
+                        car.velocity = 0;
+                        car.acceleration = 0;
+                        car.crashTimer = 0;
+                        car.x = (Math.random() - 0.5) * 3000;
+                     } else {
+                         // Check collision with bridge if falling from high (Tornado throw)
+                         // For now, if it hits water/ground plane
+                         if (car.y < 20 && Math.abs(car.vy) > 50) {
+                             // Explode on impact
+                             car.isFalling = false;
+                             car.isExploding = true;
+                             car.vy = 20; // Bounce up slightly
+                             spawnExplosion(car.x, car.y, car.z, 2.0);
+                         }
+                     }
                 }
                 // Skip other physics
             }

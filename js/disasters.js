@@ -6,6 +6,7 @@ import { removeVoxelAt, getVoxelKey } from './bridge.js';
 
 export function initDisasters(scene) {
     createVolcano(scene);
+    createTornado(scene);
     // Meteor initialization (if any needed, e.g., container) is handled dynamically
 }
 
@@ -81,6 +82,7 @@ export function triggerVolcano() {
 export function updateDisasters(dt, scene) {
     updateVolcano(dt, scene);
     updateMeteors(dt, scene);
+    updateTornado(dt, scene);
 }
 
 // [CHANGE] Helper for collisions
@@ -226,6 +228,158 @@ function updateLavaParticles(dt, vol) {
         mesh.instanceMatrix.needsUpdate = true;
     }
 }
+
+// --- Tornado Logic ---
+
+function createTornado(scene) {
+    const group = new THREE.Group();
+    group.visible = false;
+    scene.add(group);
+    state.disasters.tornado.mesh = group;
+
+    // Funnel Visuals (Stack of cones/cylinders)
+    const funnelMat = new THREE.MeshStandardMaterial({
+        color: 0x888899,
+        transparent: true,
+        opacity: 0.8,
+        roughness: 0.5,
+        flatShading: true,
+        side: THREE.DoubleSide
+    });
+
+    // Create multiple segments for the funnel
+    const segmentCount = 8;
+    for (let i = 0; i < segmentCount; i++) {
+        const t = i / (segmentCount - 1);
+        const radiusBottom = 10 + t * 50;
+        const radiusTop = 15 + t * 60;
+        const height = 60;
+        const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 16, 1, true);
+        const mesh = new THREE.Mesh(geo, funnelMat);
+        mesh.position.y = 50 + i * 50;
+        mesh.userData = { speed: 5 + Math.random() * 5, offset: Math.random() * Math.PI };
+        group.add(mesh);
+    }
+
+    // Particle System (Debris/Wind)
+    const pGeo = new THREE.BoxGeometry(2, 2, 2);
+    const pMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+    const pMesh = new THREE.InstancedMesh(pGeo, pMat, 500);
+    group.add(pMesh);
+    state.disasters.tornado.particleMesh = pMesh;
+
+    const dummy = new THREE.Object3D();
+    dummy.scale.set(0, 0, 0);
+    dummy.updateMatrix();
+
+    for (let i = 0; i < 500; i++) {
+        pMesh.setMatrixAt(i, dummy.matrix);
+        state.disasters.tornado.particles.push({
+            active: true,
+            angle: Math.random() * Math.PI * 2,
+            height: Math.random() * 400,
+            radiusOffset: Math.random() * 20,
+            speed: 2 + Math.random() * 3
+        });
+    }
+}
+
+export function triggerTornado() {
+    const torn = state.disasters.tornado;
+    if (torn.active) return;
+
+    torn.active = true;
+    torn.mesh.visible = true;
+    torn.liftedCars = [];
+    torn.pathProgress = 0;
+
+    // Generate Path (X-axis from -1600 to 1600)
+    torn.path = [];
+    const points = 10;
+    const startX = -1600;
+    const endX = 1600;
+    const step = (endX - startX) / points;
+
+    for (let i = 0; i <= points; i++) {
+        const x = startX + i * step;
+        const z = (Math.random() - 0.5) * 100; // Wander within bridge width
+        torn.path.push(new THREE.Vector3(x, 0, z));
+    }
+
+    // Set initial position
+    torn.position.copy(torn.path[0]);
+    torn.mesh.position.copy(torn.position);
+}
+
+export function checkTornadoCollision(pos) {
+    const torn = state.disasters.tornado;
+    if (!torn.active) return false;
+
+    const dx = pos.x - torn.position.x;
+    const dz = pos.z - torn.position.z;
+    const distSq = dx*dx + dz*dz;
+    return distSq < (torn.radius * torn.radius);
+}
+
+function updateTornado(dt, scene) {
+    const torn = state.disasters.tornado;
+    if (!torn.active) return;
+
+    // Move along path
+    const speed = 150; // Speed of tornado movement
+    torn.pathProgress += speed * dt;
+
+    // Calculate current position based on path segments
+    const totalDist = 3200; // Approx distance
+    const t = Math.min(torn.pathProgress / totalDist, 1.0);
+
+    // Simple Linear Interpolation between path points
+    const pointIdx = Math.floor(t * (torn.path.length - 1));
+    if (pointIdx >= torn.path.length - 1) {
+        // Reached end
+        torn.active = false;
+        torn.mesh.visible = false;
+        // Release all cars
+        torn.liftedCars = []; // Logic handled in dynamic.js to release them
+        return;
+    }
+
+    const p1 = torn.path[pointIdx];
+    const p2 = torn.path[pointIdx+1];
+    const segmentT = (t * (torn.path.length - 1)) - pointIdx;
+
+    torn.position.lerpVectors(p1, p2, segmentT);
+    torn.mesh.position.copy(torn.position);
+
+    // Animate Visuals
+    torn.mesh.children.forEach(child => {
+        if (child.isMesh && !child.isInstancedMesh) {
+            child.rotation.y += child.userData.speed * dt;
+        }
+    });
+
+    // Update Particles
+    const dummy = new THREE.Object3D();
+    torn.particles.forEach((p, i) => {
+        p.angle += p.speed * dt;
+        p.height += 20 * dt;
+        if (p.height > 450) p.height = 0;
+
+        // Funnel shape radius
+        const funnelRadius = 10 + (p.height / 450) * 80 + p.radiusOffset;
+
+        const x = Math.cos(p.angle) * funnelRadius;
+        const z = Math.sin(p.angle) * funnelRadius;
+
+        dummy.position.set(x, p.height, z);
+        dummy.rotation.set(Math.random(), Math.random(), Math.random());
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        torn.particleMesh.setMatrixAt(i, dummy.matrix);
+    });
+    torn.particleMesh.instanceMatrix.needsUpdate = true;
+}
+
 
 // --- Meteor Logic ---
 

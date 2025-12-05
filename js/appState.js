@@ -59,6 +59,17 @@ export const state = {
         meteors: {
             active: false,
             particles: []
+        },
+        tornado: {
+            active: false,
+            mesh: null,
+            particleMesh: null,
+            particles: [],
+            path: [],
+            pathProgress: 0,
+            position: new THREE.Vector3(),
+            radius: 60,
+            liftedCars: [] // IDs or references to cars
         }
     }
 };
