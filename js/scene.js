@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { state, config, colors } from './appState.js';
+import { updateSun } from './environment.js';
 
 export function createScene() {
     const scene = new THREE.Scene();
@@ -86,14 +87,20 @@ function lerpColor(color1, color2, alpha) {
 
 export function updateTimeOfDay(scene) {
     const time = config.time;
-    const angle = (time / 24) * Math.PI * 2 - Math.PI / 2;
-    const radius = 1000;
 
-    if (state.sunLight) {
-        state.sunLight.position.x = Math.cos(angle) * radius;
-        state.sunLight.position.y = Math.sin(angle) * radius;
-        state.sunLight.position.z = 500;
-    }
+    // Map time (0-24) to Elevation (-90 to 90)
+    // 6 AM = 0, 12 PM = 90, 18 PM = 0
+    const sunAngle = ((time - 6) / 12) * Math.PI;
+    config.elevation = Math.sin(sunAngle) * 90;
+
+    // Optional: Rotate azimuth slightly to make shadows interesting?
+    // config.azimuth = 180 + (time - 12) * 10; 
+
+    // Update the Sky/Sun/Water system
+    updateSun(scene);
+
+    // Keep the old color lerping for Fog and Ambient/Hemi lights for now
+    // as the Sky shader doesn't automatically handle scene fog color.
 
     // Determine phase
     let currentColors = colors.noon;
@@ -136,8 +143,10 @@ export function updateTimeOfDay(scene) {
         ambientColor.lerp(winterAmbient, season * 0.4);
     }
 
+    // Sky shader covers background, but we keep this for fallback
     scene.background.copy(skyColor);
     scene.fog.color.copy(fogColor);
+
     if (state.sunLight) state.sunLight.color.copy(sunColor);
     if (state.ambientLight) state.ambientLight.color.copy(ambientColor);
     if (state.hemisphereLight) state.hemisphereLight.groundColor.copy(hemiColor);
@@ -146,11 +155,7 @@ export function updateTimeOfDay(scene) {
         state.fogUniforms.color.value.copy(fogColor);
     }
 
-    if (state.water) {
-        state.water.material.uniforms.sunPosition.value.copy(state.sunLight.position);
-        state.water.material.uniforms.skyColor.value.copy(skyColor);
-        state.water.material.uniforms.fogColor.value.copy(fogColor);
-    }
+    // New Water handles its own uniforms via updateSun, removed old manual updates.
 
     // Intensity adjustments
     if (state.sunLight) {

@@ -11,7 +11,19 @@ export let config = {
     season: 0.0, // 0 = Summer, 1 = Winter
     weatherIntensity: 0.0, // 0 = Clear, 1 = Storm
     windSpeed: 1.0,
-    windDirection: new THREE.Vector3(1, 0, 0.5).normalize()
+    windSpeed: 1.0,
+    windDirection: new THREE.Vector3(1, 0, 0.5).normalize(),
+    // Sky Parameters
+    turbidity: 10,
+    rayleigh: 2,
+    mieCoefficient: 0.005,
+    mieDirectionalG: 0.8,
+    elevation: 2,
+    azimuth: 180,
+    // Water Parameters
+    waterDistortionScale: 3.7,
+    waterColor: 0x001e0f,
+    sunColor: 0xffffff
 };
 
 window.config = config;

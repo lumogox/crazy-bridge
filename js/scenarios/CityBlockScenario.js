@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Scenario } from './Scenario.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { cleanupTraffic } from '../dynamic.js';
 
 export class CityBlockScenario extends Scenario {
     constructor() {
@@ -124,5 +125,6 @@ export class CityBlockScenario extends Scenario {
         if (this.group) {
             scene.remove(this.group);
         }
+        cleanupTraffic(scene);
     }
 }

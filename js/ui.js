@@ -4,11 +4,43 @@ import { updateFog } from './environment.js';
 // [CHANGE] Import trigger function
 import { triggerVolcano } from './disasters.js';
 
-export function setupUI(scene, camera, interactionManager) {
+export function setupUI(scene, camera, interactionManager, scenarioManager) {
     const timeSlider = document.getElementById('timeSlider');
     const fogSlider = document.getElementById('fogSlider');
     const trafficSlider = document.getElementById('trafficSlider');
     const zoomSlider = document.getElementById('zoomSlider');
+
+    // [CHANGE] Scenario Selector
+    let scenarioContainer = document.getElementById('scenario-controls');
+    if (!scenarioContainer) {
+        const container = document.getElementById('ui-container');
+        const h1 = container.querySelector('h1');
+
+        const div = document.createElement('div');
+        div.id = 'scenario-controls';
+        div.className = 'control-group';
+        div.innerHTML = `
+            <label>Scenario</label>
+            <select id="scenarioSelector" style="width: 100%; padding: 6px; background: #333; color: white; border: 1px solid #555; border-radius: 4px;">
+                <option value="bridge">Golden Gate Bridge</option>
+                <option value="city">City Block</option>
+            </select>
+        `;
+        // Insert after H1
+        h1.insertAdjacentElement('afterend', div);
+
+        const selector = document.getElementById('scenarioSelector');
+
+        // Set initial value from storage
+        const saved = localStorage.getItem('currentScenario') || 'bridge';
+        selector.value = saved;
+
+        selector.addEventListener('change', (e) => {
+            const val = e.target.value;
+            localStorage.setItem('currentScenario', val);
+            window.location.reload();
+        });
+    }
 
     // Create Speed Slider dynamically if not exists
     let speedSlider = document.getElementById('speedSlider');

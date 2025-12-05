@@ -39,8 +39,9 @@ function init() {
     // createTerrain(scene);
 
     // Scenario Setup
-    scenarioManager = new ScenarioManager(scene);
-    scenarioManager.loadRandomScenario();
+    scenarioManager = new ScenarioManager(scene, renderer);
+    const savedScenario = localStorage.getItem('currentScenario') || 'bridge';
+    scenarioManager.loadScenarioByName(savedScenario);
 
     // createCity(scene); // City might be part of scenario or background? Leaving for now.
     // createCity(scene); // Moved to GoldenBridgeScenario
@@ -63,7 +64,7 @@ function init() {
     composer = setupPostProcessing(scene, camera, renderer);
 
     // UI
-    setupUI(scene, camera, interactionManager);
+    setupUI(scene, camera, interactionManager, scenarioManager);
 
     // Event Listeners
     window.addEventListener('resize', () => onWindowResize(camera, renderer, composer));
@@ -84,7 +85,6 @@ function animate() {
     }
     if (state.water) {
         state.water.material.uniforms.time.value = time;
-        state.water.material.uniforms.windSpeed.value = config.windSpeed;
     }
 
     updateTraffic(dt);

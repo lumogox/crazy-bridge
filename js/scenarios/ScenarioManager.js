@@ -3,19 +3,24 @@ import { CityBlockScenario } from './CityBlockScenario.js';
 import { createTraffic, createPedestrians, updatePedestrians } from '../dynamic.js';
 
 export class ScenarioManager {
-    constructor(scene) {
+    constructor(scene, renderer) {
         this.scene = scene;
+        this.renderer = renderer;
         this.currentScenario = null;
     }
 
-    loadRandomScenario() {
-        const scenarios = [
-            GoldenBridgeScenario,
-            CityBlockScenario
-        ];
-
-        const RandomScenarioClass = scenarios[Math.floor(Math.random() * scenarios.length)];
-        this.loadScenario(new RandomScenarioClass());
+    loadScenarioByName(name) {
+        let ScenarioClass;
+        switch (name) {
+            case 'city':
+                ScenarioClass = CityBlockScenario;
+                break;
+            case 'bridge':
+            default:
+                ScenarioClass = GoldenBridgeScenario;
+                break;
+        }
+        this.loadScenario(new ScenarioClass());
     }
 
     loadScenario(scenario) {
@@ -24,10 +29,7 @@ export class ScenarioManager {
         }
 
         this.currentScenario = scenario;
-        this.currentScenario.init(this.scene);
-
-        this.currentScenario = scenario;
-        this.currentScenario.init(this.scene);
+        this.currentScenario.init(this.scene, this.renderer);
 
         // Initialize traffic based on scenario config
         const trafficConfig = this.currentScenario.getTrafficConfig();

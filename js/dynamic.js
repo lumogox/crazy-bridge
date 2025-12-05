@@ -219,40 +219,90 @@ export function createShips(scene) {
     state.shipGroup = new THREE.Group();
     scene.add(state.shipGroup);
 
+    // Voxel Cargo Ship generator
     for (let i = 0; i < 5; i++) {
         const ship = new THREE.Group();
 
-        // Hull
-        const hullGeo = new THREE.BoxGeometry(20, 10, 60);
-        const hullMat = new THREE.MeshStandardMaterial({ color: 0x883333 });
+        // --- Hull ---
+        // Main Hull (Red/Black split)
+        const hullLength = 60;
+        const hullWidth = 14;
+        const hullHeight = 12;
+
+        const hullGeo = new THREE.BoxGeometry(hullWidth, hullHeight, hullLength);
+        const hullMat = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.6 }); // Dark Red
         const hull = new THREE.Mesh(hullGeo, hullMat);
-        hull.position.y = 5;
+        hull.position.y = 2; // Sit slightly up so 0 is waterline roughly
         ship.add(hull);
 
-        // Cabin
-        const cabinGeo = new THREE.BoxGeometry(15, 10, 10);
-        const cabinMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-        cabin.position.set(0, 15, -20);
-        ship.add(cabin);
+        // Deck (Gray)
+        const deckGeo = new THREE.BoxGeometry(hullWidth + 1, 1, hullLength);
+        const deckMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
+        const deck = new THREE.Mesh(deckGeo, deckMat);
+        deck.position.y = 8.5;
+        ship.add(deck);
 
-        // Lights
-        const lightGeo = new THREE.BoxGeometry(1, 1, 1);
-        // Port (Red)
-        const portLight = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-        portLight.position.set(-10, 10, 0);
-        ship.add(portLight);
-        // Starboard (Green)
-        const starLight = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
-        starLight.position.set(10, 10, 0);
-        ship.add(starLight);
-        // Mast (White)
-        const mastLight = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        mastLight.position.set(0, 25, -20);
-        ship.add(mastLight);
+        // --- Bridge / Superstructure (Rear) ---
+        const bridgeWidth = hullWidth;
+        const bridgeLength = 12;
+        const bridgeHeight = 10;
 
+        const bridgeGroup = new THREE.Group();
+        bridgeGroup.position.set(0, 14, -hullLength / 2 + 8);
+        ship.add(bridgeGroup);
+
+        // Tower Block
+        const towerGeo = new THREE.BoxGeometry(bridgeWidth, bridgeHeight, bridgeLength);
+        const towerMat = new THREE.MeshStandardMaterial({ color: 0xffffff }); // White tower
+        const tower = new THREE.Mesh(towerGeo, towerMat);
+        bridgeGroup.add(tower);
+
+        // Windows (Black strip)
+        const winGeo = new THREE.BoxGeometry(bridgeWidth + 0.2, 1.5, bridgeLength + 0.2);
+        const winMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 });
+        const windows = new THREE.Mesh(winGeo, winMat);
+        windows.position.y = 2;
+        bridgeGroup.add(windows);
+
+        // Funnel
+        const funnelGeo = new THREE.CylinderGeometry(1.5, 1.5, 6, 8);
+        const funnelMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const funnel = new THREE.Mesh(funnelGeo, funnelMat);
+        funnel.position.set(0, 8, -2);
+        bridgeGroup.add(funnel);
+
+        // --- Cargo Containers ---
+        // Random assortment of colored boxes on deck
+        const cargoColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xffaa00, 0x00aaff];
+        const containerGeo = new THREE.BoxGeometry(3.5, 3.5, 8); // Standard containerish
+
+        const startZ = -hullLength / 2 + 20;
+        const endZ = hullLength / 2 - 5;
+        const rows = 3;
+        const cols = 2;
+
+        for (let z = startZ; z < endZ; z += 9) {
+            for (let x = -3; x <= 3; x += 4) {
+                // Random stack height 1 or 2
+                const stackHeight = 1 + Math.floor(Math.random() * 2);
+                for (let h = 0; h < stackHeight; h++) {
+                    const color = cargoColors[Math.floor(Math.random() * cargoColors.length)];
+                    const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
+                    const cont = new THREE.Mesh(containerGeo, mat);
+                    cont.position.set(x, 11 + h * 3.5, z);
+                    ship.add(cont);
+                }
+            }
+        }
+
+        // Setup Physics/Logic data
         ship.position.set((Math.random() - 0.5) * 1000, -10, (Math.random() - 0.5) * 2000);
-        ship.userData = { speed: 5 + Math.random() * 5, dir: Math.random() > 0.5 ? 1 : -1 };
+        ship.userData = {
+            speed: 5 + Math.random() * 5,
+            dir: Math.random() > 0.5 ? 1 : -1,
+            isGrabbed: false,
+            sinking: false
+        };
         ship.rotation.y = ship.userData.dir === 1 ? 0 : Math.PI;
 
         state.shipGroup.add(ship);
@@ -404,7 +454,7 @@ export function updateTraffic(dt) {
                 if (!car.isCaughtInTornado && !car.isFalling && !car.isExploding) {
                     const dx = car.x - torn.position.x;
                     const dz = car.z - torn.position.z;
-                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    const dist = Math.sqrt(dx * dx + dz * dz);
 
                     if (dist < torn.radius) {
                         // Chance to get caught
@@ -486,8 +536,8 @@ export function updateTraffic(dt) {
 
                 // Impact
                 if (car.y < 60) { // Bridge height is ~67
-                     // Check if it hit the bridge deck (approx check) or water
-                     if (car.y < -20) {
+                    // Check if it hit the bridge deck (approx check) or water
+                    if (car.y < -20) {
                         // Water Splash / Reset
                         car.isFalling = false;
                         car.crashed = false;
@@ -498,17 +548,17 @@ export function updateTraffic(dt) {
                         car.acceleration = 0;
                         car.crashTimer = 0;
                         car.x = (Math.random() - 0.5) * 3000;
-                     } else {
-                         // Check collision with bridge if falling from high (Tornado throw)
-                         // For now, if it hits water/ground plane
-                         if (car.y < 20 && Math.abs(car.vy) > 50) {
-                             // Explode on impact
-                             car.isFalling = false;
-                             car.isExploding = true;
-                             car.vy = 20; // Bounce up slightly
-                             spawnExplosion(car.x, car.y, car.z, 2.0);
-                         }
-                     }
+                    } else {
+                        // Check collision with bridge if falling from high (Tornado throw)
+                        // For now, if it hits water/ground plane
+                        if (car.y < 20 && Math.abs(car.vy) > 50) {
+                            // Explode on impact
+                            car.isFalling = false;
+                            car.isExploding = true;
+                            car.vy = 20; // Bounce up slightly
+                            spawnExplosion(car.x, car.y, car.z, 2.0);
+                        }
+                    }
                 }
                 // Skip other physics
             }
@@ -740,6 +790,28 @@ export function updateTraffic(dt) {
     });
     state.headlightMesh.instanceMatrix.needsUpdate = true;
     state.taillightMesh.instanceMatrix.needsUpdate = true;
+    state.headlightMesh.instanceMatrix.needsUpdate = true;
+    state.taillightMesh.instanceMatrix.needsUpdate = true;
+}
+
+export function cleanupTraffic(scene) {
+    // Remove car meshes
+    if (state.carMeshes) {
+        Object.values(state.carMeshes).forEach(meshes => {
+            if (meshes.body) scene.remove(meshes.body);
+            if (meshes.windows) scene.remove(meshes.windows);
+            if (meshes.wheels) scene.remove(meshes.wheels);
+        });
+        state.carMeshes = {};
+    }
+
+    // Remove lights
+    if (state.headlightMesh) { scene.remove(state.headlightMesh); state.headlightMesh = null; }
+    if (state.taillightMesh) { scene.remove(state.taillightMesh); state.taillightMesh = null; }
+
+    // Clear data
+    state.trafficData = [];
+    state.trafficConfig = null;
 }
 
 export function createStreetLights(scene) {

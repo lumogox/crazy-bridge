@@ -93,109 +93,77 @@ export function createVolumetricFog(scene) {
     scene.add(state.fogSystem);
 }
 
+import { Water } from 'three/addons/objects/Water.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+
 export function createWater(scene) {
-    const geometry = new THREE.PlaneGeometry(10000, 10000, 128, 128);
-    geometry.rotateX(-Math.PI / 2);
+    const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
 
-    const waterUniforms = {
-        time: { value: 0 },
-        sunPosition: { value: new THREE.Vector3() },
-        waterColor: { value: new THREE.Color(0x001e0f) },
-        skyColor: { value: new THREE.Color(0x87CEEB) },
-        fogColor: { value: new THREE.Color(0x87CEEB) },
-        fogDensity: { value: 0.002 },
-        windSpeed: { value: 1.0 }
-    };
-
-    const material = new THREE.ShaderMaterial({
-        uniforms: waterUniforms,
-        vertexShader: `
-            uniform float time;
-            uniform float windSpeed;
-            varying vec3 vWorldPosition;
-            varying vec3 vViewPosition;
-            varying vec3 vNormal;
-
-            // Simple noise function
-            float random(vec2 st) {
-                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-            }
-            float noise(vec2 st) {
-                vec2 i = floor(st);
-                vec2 f = fract(st);
-                float a = random(i);
-                float b = random(i + vec2(1.0, 0.0));
-                float c = random(i + vec2(0.0, 1.0));
-                float d = random(i + vec2(1.0, 1.0));
-                vec2 u = f * f * (3.0 - 2.0 * f);
-                return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-            }
-
-            void main() {
-                vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-                
-                vec3 pos = position;
-                // Waves
-                float waveAmp = 1.0 + windSpeed * 0.5;
-                float waveFreq = 1.0 + windSpeed * 0.2;
-                
-                float wave1 = sin(pos.x * 0.01 * waveFreq + time * waveFreq) * 2.0 * waveAmp;
-                float wave2 = cos(pos.z * 0.01 * waveFreq + time * 0.8 * waveFreq) * 2.0 * waveAmp;
-                float wave3 = noise(pos.xz * 0.02 + time * waveFreq) * 3.0 * waveAmp;
-                
-                pos.y += wave1 + wave2 + wave3;
-                
-                // Approximate normal
-                vec3 n = vec3(0.0, 1.0, 0.0);
-                n.x = -cos(pos.x * 0.01 * waveFreq + time * waveFreq) * 0.05 * waveAmp;
-                n.z = sin(pos.z * 0.01 * waveFreq + time * 0.8 * waveFreq) * 0.05 * waveAmp;
-                vNormal = normalize(n);
-
-                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                vViewPosition = -mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
-            }
-        `,
-        fragmentShader: `
-            uniform vec3 sunPosition;
-            uniform vec3 waterColor;
-            uniform vec3 skyColor;
-            uniform vec3 fogColor;
-            uniform float fogDensity;
-            
-            varying vec3 vWorldPosition;
-            varying vec3 vViewPosition;
-            varying vec3 vNormal;
-
-            void main() {
-                vec3 viewDir = normalize(vViewPosition);
-                vec3 normal = normalize(vNormal);
-                vec3 sunDir = normalize(sunPosition);
-
-                // Specular
-                vec3 halfVector = normalize(sunDir + viewDir);
-                float NdotH = max(0.0, dot(normal, halfVector));
-                float specular = pow(NdotH, 100.0);
-
-                // Fresnel
-                float fresnel = 0.02 + 0.98 * pow(1.0 - dot(viewDir, normal), 5.0);
-
-                // Mix water and sky
-                vec3 finalColor = mix(waterColor, skyColor, fresnel);
-                finalColor += vec3(specular);
-
-                // Fog (Distance based)
-                float dist = length(vViewPosition);
-                float fogFactor = 1.0 - exp(-dist * dist * fogDensity * fogDensity);
-                
-                gl_FragColor = vec4(mix(finalColor, fogColor, fogFactor), 1.0);
-            }
-        `
+    const loader = new THREE.TextureLoader();
+    const waterNormals = loader.load('textures/waternormals.jpg', function (texture) {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     });
 
-    state.water = new THREE.Mesh(geometry, material);
-    state.water.position.y = -10; // Slightly below 0 to allow bridge piers to stick out
+    state.water = new Water(
+        waterGeometry,
+        {
+            textureWidth: 512,
+            textureHeight: 512,
+            waterNormals: waterNormals,
+            sunDirection: new THREE.Vector3(),
+            sunColor: config.sunColor,
+            waterColor: config.waterColor,
+            distortionScale: config.waterDistortionScale,
+            fog: scene.fog !== undefined
+        }
+    );
+
+    state.water.rotation.x = - Math.PI / 2;
+    state.water.position.y = -10; // Keep existing height adjustment
+
     scene.add(state.water);
+}
+
+export function createSky(scene, renderer) {
+    state.sky = new Sky();
+    state.sky.scale.setScalar(10000);
+    scene.add(state.sky);
+
+    const skyUniforms = state.sky.material.uniforms;
+
+    skyUniforms['turbidity'].value = config.turbidity;
+    skyUniforms['rayleigh'].value = config.rayleigh;
+    skyUniforms['mieCoefficient'].value = config.mieCoefficient;
+    skyUniforms['mieDirectionalG'].value = config.mieDirectionalG;
+
+    state.pmremGenerator = new THREE.PMREMGenerator(renderer);
+    state.sceneEnv = new THREE.Scene();
+}
+
+export function updateSun(scene) {
+    if (!state.sky || !state.water || !state.pmremGenerator) return;
+
+    const phi = THREE.MathUtils.degToRad(90 - config.elevation);
+    const theta = THREE.MathUtils.degToRad(config.azimuth);
+
+    const sun = new THREE.Vector3();
+    sun.setFromSphericalCoords(1, phi, theta);
+
+    state.sky.material.uniforms['sunPosition'].value.copy(sun);
+    state.water.material.uniforms['sunDirection'].value.copy(sun).normalize();
+
+    // Also update our main directional light to match
+    if (state.sunLight) {
+        state.sunLight.position.copy(sun).multiplyScalar(1000);
+    }
+
+    if (state.renderTarget) state.renderTarget.dispose();
+
+    state.sceneEnv.add(state.sky);
+    state.renderTarget = state.pmremGenerator.fromScene(state.sceneEnv);
+    state.sceneEnv.remove(state.sky); // Clean up for next frame
+
+    scene.environment = state.renderTarget.texture;
 }
 
 export function createTerrain(scene) {
@@ -264,8 +232,8 @@ export function updateTerrain() {
 }
 
 export function createCity(scene) {
-    const cityGroup = new THREE.Group();
-    scene.add(cityGroup);
+    state.cityGroup = new THREE.Group();
+    scene.add(state.cityGroup);
 
     state.cityMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.2, emissive: 0x000000 });
     const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -293,7 +261,7 @@ export function createCity(scene) {
 
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    cityGroup.add(mesh);
+    state.cityGroup.add(mesh);
 }
 
 export function createClouds(scene) {
