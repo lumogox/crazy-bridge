@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { state } from './appState.js';
+import { checkStructuralIntegrity, initStructuralIntegrity } from './physics/StructuralIntegrity.js';
 
 // Map to store voxel data for gameplay logic (destruction, collision)
 // Key: "x,z" (rounded to grid) -> Value: { mesh: THREE.InstancedMesh, index: number }[]
@@ -17,7 +18,12 @@ export function getVoxelKey(x, z) {
 export function removeVoxelAt(x, z) {
     const key = getVoxelKey(x, z);
     if (bridgeVoxelMap.has(key)) {
+        // [CHANGE] Capture the voxel Y level (approx) before deletion for integrity check
+        // We take the first voxel in the stack to determine the "destruction center"
         const voxels = bridgeVoxelMap.get(key);
+        const refVoxel = voxels[0];
+        const destroyY = refVoxel ? refVoxel.y : 67; // Default to deck height if undefined
+
         const dummy = new THREE.Object3D();
         dummy.scale.set(0, 0, 0);
         dummy.updateMatrix();
@@ -28,6 +34,17 @@ export function removeVoxelAt(x, z) {
         });
 
         bridgeVoxelMap.delete(key);
+
+        // [CHANGE] Trigger integrity check after removal
+        // Note: We need access to the scene, but this function doesn't receive it.
+        // We can access it via the mesh parent if needed, or assume global state.
+        // Or we pass scene to createBridge and store it?
+        // Let's assume the voxel mesh is attached to the scene via groups.
+        const sceneRef = voxels[0].mesh.parent;
+        if (sceneRef) {
+            checkStructuralIntegrity(x, destroyY, z, sceneRef);
+        }
+
         return true;
     }
     return false;
@@ -36,6 +53,9 @@ export function removeVoxelAt(x, z) {
 export function createBridge(scene) {
     const bridgeGroup = new THREE.Group();
     scene.add(bridgeGroup);
+
+    // [CHANGE] Init physics system
+    initStructuralIntegrity(scene);
 
     const orangeMaterial = new THREE.MeshStandardMaterial({ color: 0xf04a00, roughness: 0.4 });
     const greyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
@@ -58,7 +78,13 @@ export function createBridge(scene) {
                 if (!bridgeVoxelMap.has(key)) {
                     bridgeVoxelMap.set(key, []);
                 }
-                bridgeVoxelMap.get(key).push({ mesh: mesh, index: i });
+                // [FIX] Store full spatial data for integrity checks
+                bridgeVoxelMap.get(key).push({
+                    mesh: mesh,
+                    index: i,
+                    x: d.x, y: d.y, z: d.z,
+                    sx: d.sx, sy: d.sy, sz: d.sz
+                });
             }
         });
 
