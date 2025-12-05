@@ -4,7 +4,7 @@ import { updateFog } from './environment.js';
 // [CHANGE] Import trigger function
 import { triggerVolcano } from './disasters.js';
 
-export function setupUI(scene, camera) {
+export function setupUI(scene, camera, interactionManager) {
     const timeSlider = document.getElementById('timeSlider');
     const fogSlider = document.getElementById('fogSlider');
     const trafficSlider = document.getElementById('trafficSlider');
@@ -79,10 +79,11 @@ export function setupUI(scene, camera) {
 
         disasterDiv.innerHTML = `
             <label style="color: #ff4444; margin-bottom: 10px;">Disasters</label>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="btnVolcano" style="flex: 1; padding: 8px; background: #552222; color: white; border: 1px solid #ff4444; border-radius: 4px; cursor: pointer; font-weight: bold;">🌋 Erupt</button>
                 <button id="btnMeteor" style="flex: 1; padding: 8px; background: #222255; color: white; border: 1px solid #4444ff; border-radius: 4px; cursor: pointer; font-weight: bold;">☄️ Meteors</button>
                 <button id="btnTornado" style="flex: 1; padding: 8px; background: #555555; color: white; border: 1px solid #aaaaaa; border-radius: 4px; cursor: pointer; font-weight: bold;">🌪️ Tornado</button>
+                <button id="btnGodMode" style="flex: 1; padding: 8px; background: #444444; color: white; border: 1px solid #999999; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;">✋ God Mode: OFF</button>
             </div>
         `;
         container.appendChild(disasterDiv);
@@ -96,6 +97,23 @@ export function setupUI(scene, camera) {
         });
         document.getElementById('btnTornado').addEventListener('click', () => {
             import('./disasters.js').then(module => module.triggerTornado());
+        });
+        document.getElementById('btnGodMode').addEventListener('click', (e) => {
+            if (interactionManager) {
+                interactionManager.enabled = !interactionManager.enabled;
+                const btn = e.target;
+                if (interactionManager.enabled) {
+                    btn.textContent = "✋ God Mode: ON";
+                    btn.style.background = "#aa8800";
+                    btn.style.border = "1px solid #ffee00";
+                    btn.style.color = "black";
+                } else {
+                    btn.textContent = "✋ God Mode: OFF";
+                    btn.style.background = "#444444";
+                    btn.style.border = "1px solid #999999";
+                    btn.style.color = "white";
+                }
+            }
         });
     }
 
