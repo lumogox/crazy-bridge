@@ -7,10 +7,12 @@ This plan outlines a phased approach to enhancing the crazy-bridge repository, f
     - [x] Connectivity Check: BFS/Union-Find to check connections to anchors (Pillars/Ground).
     - [x] Dynamic Conversion: Convert disconnected static instances into dynamic falling debris.
 
-- [ ] **Phase 2: "God Hand" Interaction (Raycasting)**
-    - [ ] Raycaster Setup: Map mouse coordinates to 3D space.
-    - [ ] Event Listeners: Handle mousedown for spawning explosions or "grabbing".
-    - [ ] Visual Feedback: Cursor highlight.
+- [x] **Phase 2: "God Hand" Interaction (Raycasting)**
+    - [x] Raycaster Setup: Map mouse coordinates to 3D space.
+    - [x] Event Listeners: Handle mousedown for spawning explosions or "grabbing".
+    - [x] Visual Feedback: 3D Hand Cursor (replaces reticle).
+    - [x] UI Toggle: God Mode button in Disaster panel.
+    - [x] Mechanics: Grab cars, debris, ships, and rip static voxels.
 
 - [ ] **Phase 3: Immersive Audio System**
     - [ ] Audio Listener: Attach to camera.

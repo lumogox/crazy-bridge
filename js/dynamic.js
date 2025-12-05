@@ -263,6 +263,9 @@ export function createShips(scene) {
 export function updateShips(dt) {
     const time = performance.now() * 0.001;
     state.ships.forEach(ship => {
+        // [CHANGE] Check grabbing
+        if (ship.userData.isGrabbed) return;
+
         // [CHANGE] Check sinking status
         if (ship.userData.sinking) {
             ship.position.y -= 20 * dt; // Sink fast

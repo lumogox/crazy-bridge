@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { bridgeVoxelMap, getVoxelKey } from '../bridge.js';
 
 // Global list of falling debris
-const debrisList = [];
+export const debrisList = [];
 const DEBRIS_GRAVITY = 9.8 * 4; // Multiplied for visual effect
 const WATER_LEVEL = 0;
 
@@ -138,7 +138,7 @@ function detachCluster(keys, scene) {
     });
 }
 
-function createDebris(voxelData, scene) {
+export function createDebris(voxelData, scene) {
     // Recreate the geometry/material for the falling chunk
     // voxelData has { x, y, z, sx, sy, sz, mesh }
     // We can steal the material from the mesh (it's an InstancedMesh)
@@ -153,7 +153,7 @@ function createDebris(voxelData, scene) {
 
     scene.add(mesh);
 
-    debrisList.push({
+    const debris = {
         mesh: mesh,
         vy: 0,
         vr: { // Random rotation
@@ -161,7 +161,9 @@ function createDebris(voxelData, scene) {
             y: (Math.random() - 0.5) * 2,
             z: (Math.random() - 0.5) * 2
         }
-    });
+    };
+    debrisList.push(debris);
+    return debris;
 }
 
 export function updateDebris(dt) {
