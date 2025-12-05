@@ -5,6 +5,7 @@ import { checkStructuralIntegrity, initStructuralIntegrity } from './physics/Str
 // Map to store voxel data for gameplay logic (destruction, collision)
 // Key: "x,z" (rounded to grid) -> Value: { mesh: THREE.InstancedMesh, index: number }[]
 export const bridgeVoxelMap = new Map();
+export let bridgeGroup;
 
 // Grid size for voxels
 export const GRID_SIZE = 10;
@@ -44,18 +45,18 @@ export function removeVoxelAt(x, z) {
         // or we can pass the bridgeGroup (which is the parent) and add debris there?
         // StructuralIntegrity expects 'scene' to add debris directly to it.
         // mesh.parent is bridgeGroup. bridgeGroup.parent is scene.
-        const bridgeGroup = voxels[0].mesh.parent;
+        // const bridgeGroup = voxels[0].mesh.parent; // Now using global export
         if (bridgeGroup && bridgeGroup.parent) {
              checkStructuralIntegrity(x, destroyY, z, bridgeGroup.parent);
         }
 
-        return true;
+        return voxels;
     }
-    return false;
+    return null;
 }
 
 export function createBridge(scene) {
-    const bridgeGroup = new THREE.Group();
+    bridgeGroup = new THREE.Group();
     scene.add(bridgeGroup);
 
     // [CHANGE] Init physics system

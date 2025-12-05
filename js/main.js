@@ -9,9 +9,10 @@ import { ScenarioManager } from './scenarios/ScenarioManager.js';
 // [CHANGE] Import the disaster module
 import { initDisasters, updateDisasters } from './disasters.js';
 import { updateDebris } from './physics/StructuralIntegrity.js';
+import { InteractionManager } from './interaction.js';
 
 let scene, camera, renderer, composer, controls, stats;
-let scenarioManager;
+let scenarioManager, interactionManager;
 const clock = new THREE.Clock();
 
 init();
@@ -54,6 +55,9 @@ function init() {
 
     // [CHANGE] Initialize Disasters
     initDisasters(scene);
+
+    // Interaction (God Hand)
+    interactionManager = new InteractionManager(scene, camera);
 
     // Post-Processing
     composer = setupPostProcessing(scene, camera, renderer);
@@ -98,6 +102,8 @@ function animate() {
 
     // [CHANGE] Update Debris Physics
     updateDebris(dt);
+
+    if (interactionManager) interactionManager.update(dt);
 
     stats.update();
     composer.render();
