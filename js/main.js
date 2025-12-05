@@ -8,6 +8,7 @@ import { state, config } from './appState.js';
 import { ScenarioManager } from './scenarios/ScenarioManager.js';
 // [CHANGE] Import the disaster module
 import { initDisasters, updateDisasters } from './disasters.js';
+import { updateDebris } from './physics/StructuralIntegrity.js';
 
 let scene, camera, renderer, composer, controls, stats;
 let scenarioManager;
@@ -94,6 +95,9 @@ function animate() {
 
     // [CHANGE] Update Disasters
     updateDisasters(dt, scene);
+
+    // [CHANGE] Update Debris Physics
+    updateDebris(dt);
 
     stats.update();
     composer.render();
