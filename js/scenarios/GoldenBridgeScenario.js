@@ -34,7 +34,7 @@ export class GoldenBridgeScenario extends Scenario {
         return {
             count: 400,
             length: 3000,
-            y: 69,
+            y: 68,
             groundCheck: true, // Enable voxel ground check
             lanes: [
                 { z: -25, dir: 1 },
