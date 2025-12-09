@@ -1,11 +1,60 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MapControls } from 'three/addons/controls/MapControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { state, config, colors } from './appState.js';
 import { updateSun } from './environment.js';
+
+// Store scene objects globally for control switching
+let sceneObjects = null;
+
+export function getSceneObjects() {
+    return sceneObjects;
+}
+
+export function switchToMapControls(camera) {
+    if (!sceneObjects) return null;
+
+    // Dispose current controls
+    if (sceneObjects.controls) {
+        sceneObjects.controls.dispose();
+    }
+
+    // Create MapControls
+    const controls = new MapControls(camera, sceneObjects.renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false;
+    controls.minDistance = 100;
+    controls.maxDistance = 500;
+    controls.maxPolarAngle = Math.PI / 2;
+
+    sceneObjects.controls = controls;
+    return controls;
+}
+
+export function switchToOrbitControls(camera) {
+    if (!sceneObjects) return null;
+
+    // Dispose current controls
+    if (sceneObjects.controls) {
+        sceneObjects.controls.dispose();
+    }
+
+    // Create OrbitControls
+    const controls = new OrbitControls(camera, sceneObjects.renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.minDistance = 50;
+    controls.maxDistance = 2000;
+
+    sceneObjects.controls = controls;
+    return controls;
+}
 
 export function createScene() {
     const scene = new THREE.Scene();
@@ -31,7 +80,10 @@ export function createScene() {
     controls.minDistance = 50;
     controls.maxDistance = 2000;
 
-    return { scene, camera, renderer, controls };
+    // Store for control switching
+    sceneObjects = { scene, camera, renderer, controls };
+
+    return sceneObjects;
 }
 
 export function setupLighting(scene) {
@@ -61,7 +113,7 @@ export function setupPostProcessing(scene, camera, renderer) {
 
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
     bloomPass.threshold = 0.5;
-    bloomPass.strength = 0.3;
+    bloomPass.strength = 0.15;
     bloomPass.radius = 0.2;
 
     const outputPass = new OutputPass();

@@ -152,6 +152,9 @@ export function updateSun(scene) {
     state.sky.material.uniforms['sunPosition'].value.copy(sun);
     state.water.material.uniforms['sunDirection'].value.copy(sun).normalize();
 
+    // Update water color dynamically
+    state.water.material.uniforms['waterColor'].value.setHex(config.waterColor);
+
     // Also update our main directional light to match
     if (state.sunLight) {
         state.sunLight.position.copy(sun).multiplyScalar(1000);
@@ -317,6 +320,9 @@ export function createClouds(scene) {
 }
 
 export function updateFog(scene) {
+    // Skip fog override when in city mode (city scenario has its own fog)
+    if (state.cityMode) return;
+
     const density = config.fogDensity / 100; // 0 to 1
     if (state.fogSystem) {
         state.fogSystem.visible = density > 0.0;

@@ -22,7 +22,7 @@ export let config = {
     azimuth: 180,
     // Water Parameters
     waterDistortionScale: 3.7,
-    waterColor: 0x001e0f,
+    waterColor: 0x000820,
     sunColor: 0xffffff
 };
 
@@ -44,6 +44,7 @@ export const state = {
     particleData: [],
     towerBeacons: [],
     cityMaterial: null,
+    cityMode: false, // Flag to use city-specific fog
     water: null,
     fogSystem: null,
     fogUniforms: null,

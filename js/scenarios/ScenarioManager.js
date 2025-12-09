@@ -1,6 +1,7 @@
 import { GoldenBridgeScenario } from './GoldenBridgeScenario.js';
 import { CityBlockScenario } from './CityBlockScenario.js';
 import { createTraffic, createPedestrians, updatePedestrians } from '../dynamic.js';
+import { getSceneObjects } from '../scene.js';
 
 export class ScenarioManager {
     constructor(scene, renderer) {

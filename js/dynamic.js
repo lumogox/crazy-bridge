@@ -500,7 +500,8 @@ export function updateTraffic(dt) {
                 }
             }
 
-            // [CHANGE] Check for Ground Logic
+            // [CHANGE] Check for Ground Logic - "Magnetic Tires" system
+            // Cars dynamically follow the bridge deck surface even when it tilts/sags
             else if (!car.isFalling && !car.isExploding) {
                 // Only check ground if enabled in config
                 if (state.trafficConfig && state.trafficConfig.groundCheck) {
@@ -513,6 +514,26 @@ export function updateTraffic(dt) {
                         // [CHANGE] Init freefall velocity from movement
                         car.vx = car.velocity * dir;
                         car.vz = 0;
+                    } else {
+                        // MAGNETIC TIRES: Find the highest voxel at this position and snap to it
+                        const voxels = bridgeVoxelMap.get(key);
+                        if (voxels && voxels.length > 0) {
+                            // Find the topmost voxel (deck surface)
+                            let maxY = -Infinity;
+                            for (const voxel of voxels) {
+                                // Get the top of this voxel (y + half of scale y)
+                                const voxelTop = voxel.y + (voxel.sy || 2) / 2;
+                                if (voxelTop > maxY) {
+                                    maxY = voxelTop;
+                                }
+                            }
+                            // Smoothly interpolate car height to follow deck
+                            const targetY = maxY + 0.5; // Slight offset above deck surface
+                            const heightDiff = targetY - car.y;
+                            // Use smooth magnetic attraction - stronger when closer
+                            const magnetStrength = 20; // How quickly cars snap to surface
+                            car.y += heightDiff * Math.min(1, magnetStrength * dt);
+                        }
                     }
                 }
             }
