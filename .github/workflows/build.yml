@@ -41,6 +41,7 @@ jobs:
 
       # Deploy to live on merge to main
       - name: Deploy to Firebase Live
+        id: firebase_deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -48,3 +49,25 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CRAZY_BRIDGE }}
           channelId: live
           projectId: crazy-bridge
+
+      - name: Generate Summary
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
+        uses: actions/github-script@v7
+        env:
+          FIREBASE_URL: ${{ steps.firebase_deploy.outputs.details_url }}
+        with:
+          script: |
+            const commits = context.payload.commits || [];
+            const url = process.env.FIREBASE_URL || 'https://crazy-bridge.web.app';
+            let summary = `### Deployment Successful! 🚀\n**URL:** ${url}\n\n### Released Commits\n`;
+
+            if (commits.length > 0) {
+              for (const commit of commits) {
+                const title = commit.message.split('\n')[0];
+                summary += `- ${title}\n`;
+              }
+            } else {
+              summary += "- No new commits found in this push.\n";
+            }
+
+            await core.summary.addRaw(summary).write();
